@@ -14,7 +14,7 @@ bazel_dep(name = "hdlf_rules_kicad", version = "0.0.1")
 bazel_dep(name = "hdlf_rules_netlist", version = "0.0.1")
 bazel_dep(name = "hdlf_rules_brep", version = "0.0.1")
 bazel_dep(name = "hdlf_rules_fab", version = "0.0.1")
-bazel_dep(name = "hdlf_rules_cam", version = "0.0.1")
+bazel_dep(name = "hdlf_rules_cam", version = "0.1.0")
 
 bazel_dep(name = "bazel_skylib", version = "1.9.2", dev_dependency = True)
 

@@ -1,4 +1,5 @@
 {"tools": [
   {"number": 1, "name": "2 mm single-flute carbide end mill, for aluminium", "shape": "endmill",
-   "diameter": 2, "length": 38, "cutting_edge_height": 6, "shank_diameter": 3.175, "flutes": 1}
+   "diameter": 2, "length": 38, "cutting_edge_height": 6, "shank_diameter": 3.175, "flutes": 1,
+   "max_stepdown": 0.6}
 ]}
