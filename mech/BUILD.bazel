@@ -12,15 +12,34 @@ load(
     "interference_test",
     "pcb_fit_test",
 )
-load(":mechanics.bzl", "BOARD", "ENCLOSURE", "SENSOR", "USB", "board_holes", "board_placement", "outer_size", "params", "post_centers")
+load(
+    ":mechanics.bzl",
+    "BOARD",
+    "ENCLOSURE",
+    "PANEL",
+    "SENSOR",
+    "USB",
+    "board_holes",
+    "board_placement",
+    "check_enclosure",
+    "led_center",
+    "outer_size",
+    "panel_placement",
+    "params",
+    "post_centers",
+)
+
+check_enclosure()
 
 _PARAMS = params(
     board = BOARD,
     enclosure = ENCLOSURE,
+    panel = PANEL,
     sensor = SENSOR,
     usb = USB,
 ) | {
     "holes": json.encode(board_holes()),
+    "led": json.encode(led_center()),
     "outer": json.encode(outer_size()),
     "posts": json.encode(post_centers()),
 }
@@ -100,8 +119,9 @@ determinism_test(
     target = ":tray",
 )
 
-# The plug's margin, tested: a plug grown on every side by just under
-# usb_margin (0.4 mm) still fits, so the cut-out keeps its margin.
+# The plug's margin, tested: a plug grown across (in Y and Z) by just under
+# usb_margin (0.4 mm) still fits, and one grown by just over it does not,
+# so the cut-out is neither too small nor too large.
 cad_part(
     name = "usb_plug_with_margin",
     src = "usb_plug.py",
@@ -120,4 +140,74 @@ interference_test(
     name = "usb_margin_test",
     size = "small",
     assembly = ":tray_with_plug_margin",
+)
+
+cad_part(
+    name = "usb_plug_over_margin",
+    src = "usb_plug.py",
+    params = _PARAMS | {"grow": json.encode(ENCLOSURE["usb_margin"] + 0.05)},
+)
+
+cad_assembly(
+    name = "tray_with_plug_over_margin",
+    parts = {
+        ":tray": "{}",
+        ":usb_plug_over_margin": board_placement(),
+    },
+)
+
+interference_test(
+    name = "usb_margin_upper_test",
+    size = "small",
+    assembly = ":tray_with_plug_over_margin",
+    expect = "overlap",
+)
+
+# The front panel, milled from 2 mm aluminium: it closes the tray.
+cad_part(
+    name = "panel",
+    src = "panel.py",
+    params = _PARAMS,
+    visibility = ["//cam:__pkg__"],
+)
+
+cad_assembly(
+    name = "enclosure",
+    parts = {
+        ":board_standin": board_placement(),
+        ":panel": panel_placement(),
+        ":tray": "{}",
+        ":usb_plug": board_placement(),
+    },
+)
+
+# The whole enclosure, closed, with the board and a cable's plug.
+interference_test(
+    name = "enclosure_interference_test",
+    size = "small",
+    assembly = ":enclosure",
+)
+
+# Millable: no web thinner than 1 mm in 2 mm aluminium; the tray's outside.
+cad_check_test(
+    name = "panel_check_test",
+    size = "small",
+    max_size = [
+        "46",
+        "45",
+        "2",
+    ],
+    min_wall = "1",
+    part = ":panel",
+)
+
+cad_render(
+    name = "enclosure_views",
+    src = ":enclosure",
+)
+
+determinism_test(
+    name = "panel_determinism_test",
+    size = "small",
+    target = ":panel",
 )

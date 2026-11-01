@@ -69,6 +69,34 @@ ENCLOSURE = {
     "post_pilot_depth": 8.0,  # the panel's screws, from the rim down
 }
 
+# The front panel: 2 mm aluminium (6061), the tray's outside in XY.
+PANEL = {
+    "thickness": 2.0,
+    "screw_d": 2.7,  # M2.5 clearance, over the tray's posts
+    "led_d": 3.2,  # over the LED, for a 3 mm light pipe
+    "label_length": 24.0,  # the recessed label area
+    "label_width": 8.0,
+    "label_depth": 0.3,
+    "label_y": 34.0,  # its center, from the panel's front edge (Y 0)
+}
+
+def check_enclosure():
+    """Fails the build when the enclosure's numbers cannot work together."""
+    e = ENCLOSURE
+    if e["post_pilot_depth"] > e["inner_height"] - 1.5:
+        fail("post_pilot_depth %s leaves less than 1.5 mm under it in a %s mm post" % (e["post_pilot_depth"], e["inner_height"]))
+    if e["pilot_depth"] > e["floor"] - 1.5:
+        fail("pilot_depth %s leaves less than 1.5 mm of a %s mm floor" % (e["pilot_depth"], e["floor"]))
+
+def led_center():
+    """The LED's center in the tray's (and the panel's) frame, XY."""
+    e = ENCLOSURE
+    return [e["wall"] + e["gap_x"] + LED["x"], e["wall"] + e["gap_y"] + LED["y"]]
+
+def panel_placement():
+    """Where the panel sits: on the tray's rim."""
+    return '{"pos": [0, 0, %s]}' % outer_size()[2]
+
 def outer_size():
     """The tray's outside, [X, Y, Z] in mm."""
     e, b = ENCLOSURE, BOARD
