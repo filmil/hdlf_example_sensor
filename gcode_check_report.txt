@@ -1,0 +1,6 @@
+G-code check: 321 moves, tools [1]
+  X: -1.000 to 47.000 (span 48.000 of 300 mm travel)
+  Y: -1.000 to 46.000 (span 47.000 of 300 mm travel)
+  Z: -0.200 to 7.000 (span 7.200 of 60 mm travel)
+  stock top at Z 2.000; max feed 3000 mm/min; max spindle 24000 rpm
+no violations
