@@ -78,6 +78,23 @@ Nothing the router writes is trusted on its own:
   `shorting_items` (parity checks pads' nets, so it cannot see this).
 * `usb_pair_test` (above) and `pcb_test`, the generator's unit tests.
 
+### Fab outputs
+
+* `//pcb:jlcpcb`: JLCPCB's ZIP (`fab_package` of hdlf_rules_fab): the
+  Gerbers, the drill file, `sensor_bom.csv` and `sensor_cpl.csv`.
+  `jlcpcb_test` checks it against JLCPCB's file list and columns.
+* The BOM comes from the netlist, not a schematic (the circuit is SKiDL):
+  `pcb/bom.py` groups alike parts, leaves out the solder jumper ("Exclude
+  from BOM") and marks the SWD header DNP, which the package and the
+  placement list leave out.
+* `//pcb:fab_summary`: the package as a page for people: the order
+  settings, the files, and the parts (`//pcb:bom_md`).
+* `//pcb:step` and `//pcb:render_parts`: the board with its parts, from
+  KiCad's 3D models; the enclosure fits the STEP model.
+* No rotation corrections are set: KiCad 9's footprints follow IPC-7351's
+  zero orientation, which JLCPCB's placement mostly shares. Check each
+  part's orientation in JLCPCB's placement preview before ordering.
+
 ### The sensor
 
 The HDC2080 measures the air, not the board, so its neighbourhood is
