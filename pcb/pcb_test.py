@@ -6,9 +6,13 @@ import os
 import tempfile
 import unittest
 
+import zipfile
+
+import bom
 import gen
 import sexpr
 import spoil
+import summary
 
 MECH = {"BOARD": {"length": 40.0, "width": 25.0, "thickness": 1.6}}
 
@@ -102,6 +106,48 @@ class SpoilTest(unittest.TestCase):
     def test_project_ignores(self):
         pro = json.loads(spoil.project('{"board": {"design_settings": {}}}', ["tracks_crossing"]))
         self.assertEqual(pro["board"]["design_settings"]["rule_severities"], {"tracks_crossing": "ignore"})
+
+
+def comp(value, fp, **fields):
+    return {"value": value, "footprint": fp, "tstamp": "", "fields": fields}
+
+
+class BomTest(unittest.TestCase):
+    def test_groups_excludes_and_marks_dnp(self):
+        comps = {
+            "R10": comp("1k", "R:R", LCSC="C1"),
+            "R2": comp("1k", "R:R", LCSC="C1"),
+            "J2": comp("SWD", "J:J", LCSC="C9", DNP="DNP"),
+            "JP1": comp("Jumper", "JP:JP", **{"Exclude from BOM": ""}),
+        }
+        rows = bom.rows(comps)
+        self.assertEqual([r["Refs"] for r in rows], ["J2", "R2,R10"])
+        self.assertEqual(rows[0]["DNP"], "DNP")
+        self.assertEqual(rows[1]["Qty"], "2")
+        self.assertTrue(bom.to_csv(rows).startswith("Refs,Value,Footprint,Qty,DNP,LCSC,MPN,Manufacturer\n"))
+        self.assertIn("| J2 | SWD |", bom.to_md(rows))
+
+    def test_a_placed_part_needs_lcsc(self):
+        with tempfile.TemporaryDirectory() as d:
+            net = os.path.join(d, "n.net")
+            with open(net, "w") as f:
+                f.write('(export (components (comp (ref "R1") (value "1k") (footprint "R:R") (tstamps "a")))'
+                        ' (nets))')
+            with self.assertRaises(SystemExit):
+                bom.main(["--netlist", net, "--csv", os.path.join(d, "b.csv"), "--md", os.path.join(d, "b.md")])
+
+
+class SummaryTest(unittest.TestCase):
+    def test_lists_files_and_parts(self):
+        with tempfile.TemporaryDirectory() as d:
+            z = os.path.join(d, "p.zip")
+            with zipfile.ZipFile(z, "w") as f:
+                f.writestr("b-F_Cu.gtl", "xyz")
+            md = summary.summary(z, {"BOARD": {"length": 40, "width": 25, "thickness": 1.6}},
+                                 "# Bill of materials\n\n| Refs |\n")
+        self.assertIn("| Size | 40 x 25 mm |", md)
+        self.assertIn("| b-F_Cu.gtl | 3 |", md)
+        self.assertIn("| Refs |", md)
 
 
 class MainTest(unittest.TestCase):

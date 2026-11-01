@@ -85,3 +85,64 @@ spoiled_pcb = rule(
         "_spoil": attr.label(default = ":spoil", executable = True, cfg = "exec"),
     },
 )
+
+def _netlist_bom_impl(ctx):
+    args = ctx.actions.args()
+    args.add("--netlist", ctx.file.netlist)
+    args.add("--csv", ctx.outputs.csv)
+    args.add("--md", ctx.outputs.md)
+    ctx.actions.run(
+        executable = ctx.executable._bom,
+        arguments = [args],
+        inputs = [ctx.file.netlist],
+        outputs = [ctx.outputs.csv, ctx.outputs.md],
+        mnemonic = "NetlistBom",
+        progress_message = "Writing the BOM of %{label}",
+    )
+    return [
+        DefaultInfo(files = depset([ctx.outputs.csv])),
+        OutputGroupInfo(md = depset([ctx.outputs.md])),
+    ]
+
+netlist_bom = rule(
+    implementation = _netlist_bom_impl,
+    doc = """The board's BOM from the circuit's netlist, by bom.py: a CSV with
+kicad_bom's columns (Refs, Value, Footprint, Qty, DNP, LCSC, MPN,
+Manufacturer) for fab_package, and the same as Markdown (output group md).""",
+    attrs = {
+        "netlist": attr.label(doc = "The circuit's netlist.", allow_single_file = [".net"], mandatory = True),
+        "csv": attr.output(mandatory = True),
+        "md": attr.output(mandatory = True),
+        "_bom": attr.label(default = ":bom_tool", executable = True, cfg = "exec"),
+    },
+)
+
+def _fab_summary_impl(ctx):
+    mech = ctx.actions.declare_file(ctx.label.name + ".mech.json")
+    ctx.actions.write(mech, ctx.attr.mech)
+    out = ctx.actions.declare_file(ctx.label.name + ".md")
+    args = ctx.actions.args()
+    args.add("--zip", ctx.file.package)
+    args.add("--mech", mech)
+    args.add("--bom", ctx.file.bom_md)
+    args.add("--out", out)
+    ctx.actions.run(
+        executable = ctx.executable._summary,
+        arguments = [args],
+        inputs = [ctx.file.package, mech, ctx.file.bom_md],
+        outputs = [out],
+        mnemonic = "FabSummary",
+        progress_message = "Summarizing %{label}",
+    )
+    return [DefaultInfo(files = depset([out]))]
+
+fab_summary = rule(
+    implementation = _fab_summary_impl,
+    doc = "The fab package as Markdown, for people: order settings, files, parts.",
+    attrs = {
+        "package": attr.label(doc = "The fab_package ZIP.", allow_single_file = [".zip"], mandatory = True),
+        "bom_md": attr.label(doc = "The BOM as Markdown.", allow_single_file = [".md"], mandatory = True),
+        "mech": attr.string(doc = "mech/mechanics.bzl's numbers, as JSON.", mandatory = True),
+        "_summary": attr.label(default = ":summary_tool", executable = True, cfg = "exec"),
+    },
+)
