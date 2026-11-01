@@ -34,9 +34,11 @@ its LCSC number and datasheet; none is invented.
 
 ## Mechanical (hdlf_rules_brep)
 
-`mech/mechanics.bzl` holds the numbers the board and the enclosure share:
-the board's size and holes, and where the USB-C receptacle and the LED
-are. Both sides read them, so they cannot drift apart.
+`mech/mechanics.bzl` holds the numbers the board, the enclosure and the
+front panel share: the board's size and holes, where the USB-C receptacle,
+the sensor and the LED are, the largest USB-C plug, and the panel's screw
+posts. The enclosure reads them; the board's generator and the panel will
+too, so they cannot drift apart.
 
 * A 3D-printed enclosure: a tray with four bosses for the board's screws, a
   cut-out for the USB-C plug, and vents by the sensor.

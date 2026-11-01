@@ -19,33 +19,41 @@ def build(p):
     wall, floor = p["enclosure_wall"], p["enclosure_floor"]
     gx, gy = p["enclosure_gap_x"], p["enclosure_gap_y"]
     boss_h, inner_h = p["enclosure_boss_height"], p["enclosure_inner_height"]
+    pilot_r, pilot_depth = p["enclosure_pilot_d"] / 2, p["enclosure_pilot_depth"]
     il, iw = L + 2 * gx, W + 2 * gy
     ol, ow, oh = il + 2 * wall, iw + 2 * wall, floor + inner_h
 
     tray = Box(ol, ow, oh, align=MIN) - Pos(wall, wall, floor) * Box(il, iw, inner_h + 1, align=MIN)
 
-    # The board's mounting bosses, each with a pilot hole down to the floor.
+    # A pilot hole: from pilot_depth into the floor to above its boss or
+    # post, so no cut ends on a face it cuts; an M2.5 x 6 screw through the
+    # board or the panel has room.
+    def pilot(x, y, height):
+        return Pos(x, y, floor - pilot_depth) * Cylinder(pilot_r, pilot_depth + height + 1, align=CTR)
+
+    # The board's mounting bosses.
     bx, by = wall + gx, wall + gy
     for hx, hy in p["holes"]:
-        at = Pos(bx + hx, by + hy, floor)
-        tray += at * Cylinder(p["enclosure_boss_d"] / 2, boss_h, align=CTR)
-        tray -= at * Cylinder(p["enclosure_pilot_d"] / 2, boss_h, align=CTR)
+        tray += Pos(bx + hx, by + hy, floor) * Cylinder(p["enclosure_boss_d"] / 2, boss_h, align=CTR)
+        tray -= pilot(bx + hx, by + hy, boss_h)
 
-    # The panel's screw posts, in the inside corners, up to the rim.
-    r = p["enclosure_post_d"] / 2
-    for cx in (wall + r, ol - wall - r):
-        for cy in (wall + r, ow - wall - r):
-            at = Pos(cx, cy, floor)
-            tray += at * Cylinder(r, inner_h, align=CTR)
-            tray -= at * Cylinder(p["enclosure_pilot_d"] / 2, inner_h, align=CTR)
+    # The front panel's screw posts, in the corners and part of the walls.
+    for cx, cy in p["posts"]:
+        tray += Pos(cx, cy, floor) * Cylinder(p["enclosure_post_d"] / 2, inner_h, align=CTR)
+        tray -= pilot(cx, cy, inner_h)
 
-    # The USB-C plug's way in, through the left wall, around the receptacle.
+    # The USB-C plug's way in, through the left wall: the plug's overmold,
+    # centered on the receptacle, with a margin.
     m = p["enclosure_usb_margin"]
     top = floor + boss_h + T
-    uw, uh = p["usb_width"] + 2 * m, p["usb_height"] + 2 * m
-    tray -= Pos(-1, by + p["usb_y"] - uw / 2, top - m) * Box(wall + 2, uw, uh, align=MIN)
+    zc = top + p["usb_height"] / 2
+    pw, ph = p["usb_plug_width"] + 2 * m, p["usb_plug_height"] + 2 * m
+    tray -= Pos(-1, by + p["usb_y"] - pw / 2, zc - ph / 2) * Box(wall + 2, pw, ph, align=MIN)
 
-    # Vents in the right wall, by the sensor: four slots.
-    for i in range(4):
-        tray -= Pos(ol - wall - 1, by + 4 + i * 5, floor + 4) * Box(wall + 2, 2, 6, align=MIN)
+    # Vents in the right wall, facing the sensor, above the board.
+    n, pitch = p["enclosure_vent_count"], p["enclosure_vent_pitch"]
+    vw, vh = p["enclosure_vent_width"], p["enclosure_vent_height"]
+    y0 = by + p["sensor_y"] - ((n - 1) * pitch + vw) / 2
+    for i in range(n):
+        tray -= Pos(ol - wall - 1, y0 + i * pitch, top + 1) * Box(wall + 2, vw, vh, align=MIN)
     return tray
