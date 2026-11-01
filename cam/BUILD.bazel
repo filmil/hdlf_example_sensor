@@ -12,6 +12,13 @@ load(
 )
 load(":step_of.bzl", "step_of")
 
+# Every target and source file here is public, so that a module that
+# depends on this one (the manual, the book) can quote and build it.
+# https://github.com/filmil/hdlf_example_sensor/issues/11
+package(default_visibility = ["//visibility:public"])
+
+exports_files(glob(["*"]))
+
 step_of(
     name = "panel_step",
     part = "//mech:panel",

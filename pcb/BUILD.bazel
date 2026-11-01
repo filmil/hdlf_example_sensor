@@ -14,6 +14,13 @@ load("@rules_python//python:py_test.bzl", "py_test")
 load("//mech:mechanics.bzl", "BOARD", "LED", "SENSOR", "USB", "board_holes")
 load(":pcb.bzl", "fab_summary", "netlist_bom", "pcb_files", "spoiled_pcb")
 
+# Every target and source file here is public, so that a module that
+# depends on this one (the manual, the book) can quote and build it.
+# https://github.com/filmil/hdlf_example_sensor/issues/11
+package(default_visibility = ["//visibility:public"])
+
+exports_files(glob(["*"]))
+
 # The generator's modules, which the tools and the tests share.
 py_library(
     name = "pcb_lib",
