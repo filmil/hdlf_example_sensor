@@ -23,6 +23,16 @@ The circuit is written as code (SKiDL), and `netlist_parity_test` checks the
 board's connections against it. Every part is a real, orderable one, with
 its LCSC number and datasheet; none is invented.
 
+`elec/parts.py` lists the parts, as #5 chose them: an STM32F042F6P6
+(crystal-less USB), an XC6206P332MR regulator, an HDC2080 sensor at I²C
+address 0x40, a GCT USB4105 receptacle, a USBLC6-2SC6 for ESD, and 0603
+passives and LED. `elec/circuit.py` connects them, citing the datasheet
+page for each connection, and fails the build on any SKiDL ERC error or
+warning, or on a part that lacks its LCSC number, MPN, maker or
+datasheet. The microcontroller programs over USB (DFU) with the BOOT0
+solder jumper closed, or over SWD from the 4-pin header, which the
+assembly service does not fit.
+
 ## The board (hdlf_rules_kicad, hdlf_rules_fab)
 
 * About 40 × 25 mm, 2 layers, 1.6 mm thick.
