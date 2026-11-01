@@ -24,6 +24,16 @@ import gen
 COLUMNS = ["Refs", "Value", "Footprint", "Qty", "DNP", "LCSC", "MPN", "Manufacturer"]
 
 
+# A field's value decides, not its presence: "DNP": "" or "0" is not DNP.
+_FALSE = ("", "0", "false", "no", "n")
+
+
+def _flag(fields, name):
+    """Whether the field name is set to a true value (circuit.py writes
+    "DNP" and "yes")."""
+    return fields.get(name, "").strip().lower() not in _FALSE
+
+
 def _ref_key(ref):
     m = re.match(r"([A-Za-z]+)(\d+)$", ref)
     return (m.group(1), int(m.group(2))) if m else (ref, 0)
@@ -33,10 +43,10 @@ def rows(comps):
     groups = {}
     for ref, c in comps.items():
         f = c["fields"]
-        if "Exclude from BOM" in f:
+        if _flag(f, "Exclude from BOM"):
             continue
         key = (c["value"], c["footprint"], f.get("LCSC", ""), f.get("MPN", ""),
-               f.get("Manufacturer", ""), "DNP" if "DNP" in f else "")
+               f.get("Manufacturer", ""), "DNP" if _flag(f, "DNP") else "")
         groups.setdefault(key, []).append(ref)
     out = []
     for (value, fp, lcsc, mpn, mfr, dnp), refs in groups.items():
@@ -54,13 +64,21 @@ def to_csv(rs):
     return b.getvalue()
 
 
+def _cell(text):
+    """A Markdown table cell: | escaped, line breaks as spaces."""
+    return " ".join(text.split()).replace("|", "\\|")
+
+
 def to_md(rs):
+    placed = [r for r in rs if not r["DNP"]]
+    dnp = [r for r in rs if r["DNP"]]
     lines = ["# Bill of materials", "",
-             "%d part(s) in %d line(s); DNP parts are not assembled." % (
-                 sum(int(r["Qty"]) for r in rs), len(rs)), "",
+             "%d part(s) to assemble in %d line(s); %d DNP part(s) in %d line(s), not assembled." % (
+                 sum(int(r["Qty"]) for r in placed), len(placed),
+                 sum(int(r["Qty"]) for r in dnp), len(dnp)), "",
              "| " + " | ".join(COLUMNS) + " |", "|" + "|".join(["---"] * len(COLUMNS)) + "|"]
     for r in rs:
-        lines.append("| " + " | ".join(r[c].replace("|", "\\|") for c in COLUMNS) + " |")
+        lines.append("| " + " | ".join(_cell(r[c]) for c in COLUMNS) + " |")
     return "\n".join(lines) + "\n"
 
 

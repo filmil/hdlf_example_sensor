@@ -124,6 +124,7 @@ def _fab_summary_impl(ctx):
     args = ctx.actions.args()
     args.add("--zip", ctx.file.package)
     args.add("--mech", mech)
+    args.add("--stackup", ctx.attr.stackup)
     args.add("--bom", ctx.file.bom_md)
     args.add("--out", out)
     ctx.actions.run(
@@ -143,6 +144,7 @@ fab_summary = rule(
         "package": attr.label(doc = "The fab_package ZIP.", allow_single_file = [".zip"], mandatory = True),
         "bom_md": attr.label(doc = "The BOM as Markdown.", allow_single_file = [".md"], mandatory = True),
         "mech": attr.string(doc = "mech/mechanics.bzl's numbers, as JSON.", mandatory = True),
+        "stackup": attr.string(doc = "The stackup fab_rules uses, such as 2L-1oz.", mandatory = True),
         "_summary": attr.label(default = ":summary_tool", executable = True, cfg = "exec"),
     },
 )

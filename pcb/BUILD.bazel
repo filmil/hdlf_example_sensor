@@ -9,20 +9,27 @@ load("@hdlf_rules_fab//fab:defs.bzl", "fab_package", "fab_package_test", "fab_ru
 load("@hdlf_rules_kicad//kicad:defs.bzl", "kicad_autoroute", "kicad_drc_test", "kicad_drill", "kicad_gerbers", "kicad_pcb", "kicad_pos", "kicad_render", "kicad_step")
 load("@hdlf_rules_netlist//netlist:defs.bzl", "determinism_test", "netlist_parity_test")
 load("@rules_python//python:py_binary.bzl", "py_binary")
+load("@rules_python//python:py_library.bzl", "py_library")
 load("@rules_python//python:py_test.bzl", "py_test")
 load("//mech:mechanics.bzl", "BOARD", "LED", "SENSOR", "USB", "board_holes")
 load(":pcb.bzl", "fab_summary", "netlist_bom", "pcb_files", "spoiled_pcb")
 
-py_binary(
-    name = "bom_tool",
+# The generator's modules, which the tools and the tests share.
+py_library(
+    name = "pcb_lib",
     srcs = [
-        "bom.py",
         "gen.py",
         "placement.py",
         "sexpr.py",
     ],
     imports = ["."],
+)
+
+py_binary(
+    name = "bom_tool",
+    srcs = ["bom.py"],
     main = "bom.py",
+    deps = [":pcb_lib"],
 )
 
 py_binary(
@@ -33,23 +40,16 @@ py_binary(
 
 py_binary(
     name = "spoil",
-    srcs = [
-        "sexpr.py",
-        "spoil.py",
-    ],
-    imports = ["."],
+    srcs = ["spoil.py"],
     main = "spoil.py",
+    deps = [":pcb_lib"],
 )
 
 py_binary(
     name = "gen",
-    srcs = [
-        "gen.py",
-        "placement.py",
-        "sexpr.py",
-    ],
-    imports = ["."],
+    srcs = ["gen.py"],
     main = "gen.py",
+    deps = [":pcb_lib"],
 )
 
 # The helpers' unit tests: S-expressions, rotation, slots, the netlist
@@ -59,20 +59,21 @@ py_test(
     size = "small",
     srcs = [
         "bom.py",
-        "gen.py",
         "pcb_test.py",
-        "placement.py",
-        "sexpr.py",
         "spoil.py",
         "summary.py",
     ],
     imports = ["."],
     main = "pcb_test.py",
+    deps = [":pcb_lib"],
 )
+
+# The board's stackup, for the DRC rules and the order summary.
+_STACKUP = "2L-1oz"
 
 fab_rules(
     name = "jlcpcb_rules",
-    stackup = "2L-1oz",
+    stackup = _STACKUP,
     vendor = "jlcpcb",
 )
 
@@ -145,14 +146,11 @@ netlist_parity_test(
 py_test(
     name = "usb_pair_test",
     size = "small",
-    srcs = [
-        "pair_test.py",
-        "sexpr.py",
-    ],
+    srcs = ["pair_test.py"],
     args = ["$(rootpath :sensor)"],
     data = [":sensor"],
-    imports = ["."],
     main = "pair_test.py",
+    deps = [":pcb_lib"],
 )
 
 determinism_test(
@@ -249,7 +247,7 @@ kicad_drc_test(
     pcb = ":bad_copper_short_pcb",
 )
 
-# The fab outputs, and JLCPCB's package (issue #5's assembly plan).
+# The fab outputs, and JLCPCB's package (issue #15).
 kicad_gerbers(
     name = "gerbers",
     pcb = ":pcb",
@@ -296,6 +294,7 @@ fab_summary(
     bom_md = ":bom_md",
     mech = _MECH,
     package = ":jlcpcb",
+    stackup = _STACKUP,
 )
 
 fab_package_test(
@@ -342,8 +341,12 @@ filegroup(
     name = "fab_outputs",
     srcs = [
         ":bom",
+        ":bom_md",
+        ":drill",
         ":fab_summary",
+        ":gerbers",
         ":jlcpcb",
+        ":pos",
         ":render_parts",
         ":step",
     ],
