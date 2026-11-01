@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        bazel: ["8.x", "9.x"]
+    env:
+      USE_BAZEL_VERSION: ${{ matrix.bazel }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Cache Bazel downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/bazel-repo
+            ~/.cache/bazelisk
+          key: bazel-${{ matrix.bazel }}-${{ hashFiles('MODULE.bazel', '.bazelversion', '.bazelrc') }}
+          restore-keys: bazel-${{ matrix.bazel }}-
+      - name: Test
+        run: bazelisk test --repository_cache=$HOME/.cache/bazel-repo //...
