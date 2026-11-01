@@ -51,7 +51,9 @@ too, so they cannot drift apart.
 ## The front panel (hdlf_rules_brep, hdlf_rules_cam)
 
 * A 2 mm aluminium plate that closes the tray: four holes for its screws,
-  a hole over the LED, and an engraved name.
+  a hole over the LED for a light pipe, and a shallow recessed label area
+  (0.3 mm). An engraved name would need a font, and build123d's text reads
+  the host's fonts, which a hermetic build may not.
 * Its G-code, from FreeCAD's CAM for a GRBL router, checked against the
   machine by `gcode_check_test`. No machine runs it before a person checks
   it.

@@ -12,15 +12,32 @@ load(
     "interference_test",
     "pcb_fit_test",
 )
-load(":mechanics.bzl", "BOARD", "ENCLOSURE", "SENSOR", "USB", "board_holes", "board_placement", "outer_size", "params", "post_centers")
+load(
+    ":mechanics.bzl",
+    "BOARD",
+    "ENCLOSURE",
+    "PANEL",
+    "SENSOR",
+    "USB",
+    "board_holes",
+    "board_placement",
+    "led_center",
+    "outer_size",
+    "panel_placement",
+    "params",
+    "post_centers",
+)
+
 
 _PARAMS = params(
     board = BOARD,
     enclosure = ENCLOSURE,
+    panel = PANEL,
     sensor = SENSOR,
     usb = USB,
 ) | {
     "holes": json.encode(board_holes()),
+    "led": json.encode(led_center()),
     "outer": json.encode(outer_size()),
     "posts": json.encode(post_centers()),
 }
@@ -80,11 +97,7 @@ interference_test(
 cad_check_test(
     name = "tray_check_test",
     size = "small",
-    max_size = [
-        "50",
-        "50",
-        "20",
-    ],
+    max_size = [str(x) for x in outer_size()],
     min_wall = "1.5",
     part = ":tray",
 )
@@ -100,8 +113,9 @@ determinism_test(
     target = ":tray",
 )
 
-# The plug's margin, tested: a plug grown on every side by just under
-# usb_margin (0.4 mm) still fits, so the cut-out keeps its margin.
+# The plug's margin, tested: a plug grown across (in Y and Z) by just under
+# usb_margin (0.4 mm) still fits, and one grown by just over it does not,
+# so the cut-out is neither too small nor too large.
 cad_part(
     name = "usb_plug_with_margin",
     src = "usb_plug.py",
@@ -120,4 +134,90 @@ interference_test(
     name = "usb_margin_test",
     size = "small",
     assembly = ":tray_with_plug_margin",
+)
+
+# One side at a time, so that each of the four sides is at its margin.
+[
+    (
+        cad_part(
+            name = "usb_plug_over_margin_" + name,
+            src = "usb_plug.py",
+            params = _PARAMS | {
+                "grow": json.encode(ENCLOSURE["usb_margin"] + 0.05),
+                "grow_side": json.encode(side),
+            },
+        ),
+        cad_assembly(
+            name = "tray_with_plug_over_margin_" + name,
+            parts = {
+                ":tray": "{}",
+                ":usb_plug_over_margin_" + name: board_placement(),
+            },
+        ),
+        interference_test(
+            name = "usb_margin_upper_" + name + "_test",
+            size = "small",
+            assembly = ":tray_with_plug_over_margin_" + name,
+            expect = "overlap",
+        ),
+    )
+    for name, side in [
+        ("left", "y-"),
+        ("right", "y+"),
+        ("bottom", "z-"),
+        ("top", "z+"),
+    ]
+]
+
+# The front panel, milled from 2 mm aluminium: it closes the tray.
+cad_part(
+    name = "panel",
+    src = "panel.py",
+    params = _PARAMS,
+    visibility = ["//cam:__pkg__"],
+)
+
+cad_part(
+    name = "fasteners",
+    src = "fasteners.py",
+    params = _PARAMS,
+)
+
+cad_assembly(
+    name = "enclosure",
+    parts = {
+        ":board_standin": board_placement(),
+        ":fasteners": "{}",
+        ":panel": panel_placement(),
+        ":tray": "{}",
+        ":usb_plug": board_placement(),
+    },
+)
+
+# The whole enclosure, closed, with the board, a cable's plug, the panel's
+# screws and the light pipe: the panel's holes line up with the tray.
+interference_test(
+    name = "enclosure_interference_test",
+    size = "small",
+    assembly = ":enclosure",
+)
+
+# Millable: no web thinner than 1 mm in 2 mm aluminium; the tray's outside.
+cad_check_test(
+    name = "panel_check_test",
+    size = "small",
+    max_size = [str(x) for x in outer_size()[:2] + [PANEL["thickness"]]],
+    min_wall = "1",
+    part = ":panel",
+)
+
+cad_render(
+    name = "enclosure_views",
+    src = ":enclosure",
+)
+
+determinism_test(
+    name = "panel_determinism_test",
+    size = "small",
+    target = ":panel",
 )

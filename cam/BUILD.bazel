@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# The front panel's G-code: FreeCAD's CAM, for a GRBL router, checked against
+# the machine. No machine runs it before a person checks it.
+load(
+    "@hdlf_rules_cam//cam:defs.bzl",
+    "cam_job",
+    "determinism_test",
+    "gcode_check_test",
+    "machine",
+    "tool_library",
+)
+load(":step_of.bzl", "step_of")
+
+step_of(
+    name = "panel_step",
+    part = "//mech:panel",
+)
+
+tool_library(
+    name = "tools",
+    src = "tools.json",
+)
+
+# A small hobby router with a GRBL controller.
+machine(
+    name = "router",
+    envelope = [
+        "300",
+        "300",
+        "60",
+    ],
+    max_feed = "3000",
+    max_spindle = "24000",
+    post = "grbl",
+)
+
+cam_job(
+    name = "panel",
+    machine = ":router",
+    ops = "panel_ops.py",
+    part = ":panel_step",
+    # Stock: 4 mm of plate around the panel, held by its margin; no more on
+    # top or below than the plate's 2 mm.
+    stock = {
+        "x": "4",
+        "y": "4",
+    },
+    tools = ":tools",
+)
+
+gcode_check_test(
+    name = "panel_gcode_test",
+    size = "small",
+    job = ":panel",
+)
+
+determinism_test(
+    name = "panel_determinism_test",
+    size = "small",
+    target = ":panel",
+)
