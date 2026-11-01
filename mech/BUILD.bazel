@@ -12,7 +12,7 @@ load(
     "interference_test",
     "pcb_fit_test",
 )
-load(":mechanics.bzl", "BOARD", "ENCLOSURE", "SENSOR", "USB", "board_holes", "board_placement", "params", "post_centers")
+load(":mechanics.bzl", "BOARD", "ENCLOSURE", "SENSOR", "USB", "board_holes", "board_placement", "outer_size", "params", "post_centers")
 
 _PARAMS = params(
     board = BOARD,
@@ -21,6 +21,7 @@ _PARAMS = params(
     usb = USB,
 ) | {
     "holes": json.encode(board_holes()),
+    "outer": json.encode(outer_size()),
     "posts": json.encode(post_centers()),
 }
 
@@ -97,4 +98,26 @@ determinism_test(
     name = "tray_determinism_test",
     size = "small",
     target = ":tray",
+)
+
+# The plug's margin, tested: a plug grown on every side by just under
+# usb_margin (0.4 mm) still fits, so the cut-out keeps its margin.
+cad_part(
+    name = "usb_plug_with_margin",
+    src = "usb_plug.py",
+    params = _PARAMS | {"grow": json.encode(ENCLOSURE["usb_margin"] - 0.05)},
+)
+
+cad_assembly(
+    name = "tray_with_plug_margin",
+    parts = {
+        ":tray": "{}",
+        ":usb_plug_with_margin": board_placement(),
+    },
+)
+
+interference_test(
+    name = "usb_margin_test",
+    size = "small",
+    assembly = ":tray_with_plug_margin",
 )

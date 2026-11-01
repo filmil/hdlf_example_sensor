@@ -13,6 +13,8 @@ from build123d import Align, Box, Pos
 
 def build(p):
     T = p["board_thickness"]
-    w, h, length = p["usb_plug_width"], p["usb_plug_height"], p["usb_plug_length"]
+    # "grow" makes it larger on every side but the mouth: the margin test.
+    g = p.get("grow", 0)
+    w, h, length = p["usb_plug_width"] + 2 * g, p["usb_plug_height"] + 2 * g, p["usb_plug_length"]
     zc = T + p["usb_height"] / 2
     return Pos(-length, p["usb_y"] - w / 2, zc - h / 2) * Box(length, w, h, align=(Align.MIN, Align.MIN, Align.MIN))
