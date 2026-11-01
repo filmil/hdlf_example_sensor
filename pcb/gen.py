@@ -67,14 +67,6 @@ def num(v):
     return "0" if s in ("-0", "") else s
 
 
-def local_to_board(x0, y0, rot, lx, ly):
-    """A footprint's local point (KiCad's axes) on the board (Y up)."""
-    t = math.radians(rot)
-    kx = lx * math.cos(t) + ly * math.sin(t)
-    ky = -lx * math.sin(t) + ly * math.cos(t)
-    return x0 + kx, y0 - ky
-
-
 def read_netlist(path):
     root = sexpr.parse(open(path, encoding="utf-8").read())
     comps = {}
@@ -83,7 +75,7 @@ def read_netlist(path):
         f = c.child("fields")
         if f:
             for fl in f.children("field"):
-                fields[fl.child("name").arg(0)] = fl.arg(0)
+                fields[fl.child("name").arg(0)] = fl.arg(0) or ""
         comps[c.child("ref").arg(0)] = {
             "value": c.child("value").arg(0),
             "footprint": c.child("footprint").arg(0),
@@ -135,6 +127,8 @@ def footprint(board, libdir, lib_id, ref, value, tstamp, fields, x, y, rot, pad_
             _rotate_at(c, rot)
         if h == "pad":
             _rotate_at(c, rot)
+            # A library pad has no net; any it has is replaced, not doubled.
+            c.items = [e for e in c.items if not (e.is_list and e.head() == "net")]
             pn = pad_nets.get(c.arg(0))
             if pn:
                 net = L("net", A(str(board.net(pn))), Q(pn))
@@ -155,17 +149,29 @@ def footprint(board, libdir, lib_id, ref, value, tstamp, fields, x, y, rot, pad_
     return fp
 
 
+def _is_number(atom):
+    try:
+        float(atom)
+        return True
+    except ValueError:
+        return False
+
+
 def _rotate_at(node, rot):
+    """Adds the footprint's rotation to a child's (at x y [angle] [unlocked]):
+    on a board, a pad's or a text's angle is its own plus the footprint's."""
     at = node.child("at")
     if at is None or rot == 0:
         return
-    args = [c for c in at.items[1:] if not c.is_list]
-    base = float(args[2].atom) if len(args) > 2 else 0.0
-    ang = num((base + rot) % 360)
-    if len(args) > 2:
-        args[2].atom = ang
+    nums = [c for c in at.items[1:] if not c.is_list and not c.quoted and _is_number(c.atom)]
+    if len(nums) < 2:
+        raise ValueError("(at ...) without x and y: %s" % sexpr.write(at))
+    base = float(nums[2].atom) if len(nums) > 2 else 0.0
+    ang = A(num((base + rot) % 360))
+    if len(nums) > 2:
+        nums[2].atom = ang.atom
     else:
-        at.items.append(A(ang))
+        at.items.insert(at.items.index(nums[1]) + 1, ang)
 
 
 def _fresh(board, node):
@@ -266,9 +272,10 @@ def project(name):
     }, indent=2, sort_keys=True) + "\n"
 
 
-# The known-bad PCBs, for netlist_parity_test: each spoils one pad's net.
-# missing_net: the sensor's SDA pad is on no net. short: its SCL pad is on
-# the SDA net, so that one board net joins two of the netlist's.
+# The known-bad PCBs. For netlist_parity_test, each of these spoils one
+# pad's net. missing_net: the sensor's SDA pad is on no net. short: its
+# SCL pad is on the SDA net, so that one board net joins two of the
+# netlist's.
 BAD = {
     "missing_net": (("U3", "1"), None),
     "short": (("U3", "6"), "I2C_SDA"),
@@ -356,6 +363,8 @@ def main(argv):
     p.add_argument("--pro", required=True)
     p.add_argument("--bad", default="", choices=["", "missing_net", "short"])
     a = p.parse_args(argv)
+    if not a.pro.endswith(".kicad_pro"):
+        raise SystemExit("--pro %s: not a .kicad_pro" % a.pro)
     mech = json.load(open(a.mech, encoding="utf-8"))
     comps, pads = read_netlist(a.netlist)
     text = build(mech, comps, pads, a.footprints, a.bad)

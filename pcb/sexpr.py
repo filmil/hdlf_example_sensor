@@ -40,11 +40,6 @@ class Node:
                 return c
         return None
 
-    def copy(self):
-        if self.is_list:
-            return Node([c.copy() for c in self.items])
-        return Node(atom=self.atom, quoted=self.quoted)
-
 
 def A(s):
     return Node(atom=str(s))
@@ -56,6 +51,12 @@ def Q(s):
 
 def L(head, *items):
     return Node([A(head)] + list(items))
+
+
+# Escapes in quoted strings, both ways, so that what parse reads, write
+# writes back the same.
+_UNESCAPE = {"n": "\n", "t": "\t", "r": "\r"}
+_ESCAPE = {"\\": "\\\\", '"': '\\"', "\n": "\\n", "\t": "\\t", "\r": "\\r"}
 
 
 def parse(text):
@@ -92,7 +93,7 @@ def parse(text):
                 ch = text[pos[0]]
                 if ch == "\\" and pos[0] + 1 < n:
                     pos[0] += 1
-                    ch = {"n": "\n", "t": "\t"}.get(text[pos[0]], text[pos[0]])
+                    ch = _UNESCAPE.get(text[pos[0]], text[pos[0]])
                 out.append(ch)
                 pos[0] += 1
             if pos[0] >= n:
@@ -113,7 +114,7 @@ def parse(text):
 
 def _atom(nd):
     if nd.quoted:
-        return '"' + nd.atom.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
+        return '"' + "".join(_ESCAPE.get(c, c) for c in nd.atom) + '"'
     return nd.atom
 
 

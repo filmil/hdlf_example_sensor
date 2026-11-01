@@ -10,6 +10,8 @@ HOLE_FOOTPRINT = "MountingHole:MountingHole_2.7mm_M2.5"
 
 # No copper within this radius of a hole's center, on either side: an M2.5
 # pan head is about 4.5 mm across, and the footprint's courtyard is 2.7 mm.
+# gen.py draws the keep-out as a 16-sided polygon around this circle, so
+# its corners reach 2.75 mm.
 SCREW_HEAD_KEEPOUT_R = 2.7
 
 # The receptacle's mouth is its footprint's +Y side, 3.675 mm from its

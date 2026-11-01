@@ -59,8 +59,11 @@ The placed board has no copper. Freerouting routes it
 (`kicad_autoroute` of hdlf_rules_kicad), with JLCPCB's clearance from the
 `fab_rules` file, into `sensor.kicad_pcb`. GND is tracks; the board has
 no copper pour (zone fill) in this version. The routing report,
-`sensor.routing.md`, lists each net's length on each layer, its tracks
-and its vias. The USB data pair runs on the top layer without vias.
+`sensor.routing.md` (`bazel build //pcb:routing_report`), lists each net's length on each layer, its tracks
+and its vias. The USB data pair runs on the top layer without vias, D+ and D- within
+1 mm of each other from the receptacle to the microcontroller
+(`usb_pair_test`). Full Speed USB would take far more skew; the limit
+keeps the pair a pair when the placement changes.
 
 Nothing the router writes is trusted on its own:
 
@@ -70,6 +73,10 @@ Nothing the router writes is trusted on its own:
   Two known-bad boards, one with a pad on no net and one with two nets
   joined, must fail it.
 * `pcb_determinism_test`: the same board from two configurations.
+* `bad_copper_short_drc_test`: the routed board with one more track,
+  joining the sensor's SDA and GND pads, must fail the DRC with
+  `shorting_items` (parity checks pads' nets, so it cannot see this).
+* `usb_pair_test` (above) and `pcb_test`, the generator's unit tests.
 
 ### The sensor
 
