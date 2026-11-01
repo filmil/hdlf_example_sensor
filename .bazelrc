@@ -16,5 +16,9 @@ build --action_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
 build --incompatible_strict_action_env
 build --sandbox_default_allow_network=false
 
+# Python tools start on rules_python's own interpreter, not the host's
+# python3 (hdlf_rules_brep's README).
+common --@rules_python//python/config_settings:bootstrap_impl=script
+
 # Add your local user settings to file `user.bazelrc`.
 try-import %workspace%/user.bazelrc
