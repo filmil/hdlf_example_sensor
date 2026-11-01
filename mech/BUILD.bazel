@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# The enclosure: a 3D-printed tray that the board screws into, closed by the
+# milled aluminium front panel. mechanics.bzl has the shared numbers.
+load(
+    "@hdlf_rules_brep//brep:defs.bzl",
+    "cad_assembly",
+    "cad_check_test",
+    "cad_part",
+    "cad_render",
+    "determinism_test",
+    "interference_test",
+    "pcb_fit_test",
+)
+load(":mechanics.bzl", "BOARD", "ENCLOSURE", "USB", "board_holes", "board_placement", "params")
+
+_PARAMS = params(
+    board = BOARD,
+    enclosure = ENCLOSURE,
+    usb = USB,
+) | {"holes": json.encode(board_holes())}
+
+cad_part(
+    name = "tray",
+    src = "tray.py",
+    params = _PARAMS,
+)
+
+# The board's outline, holes and USB-C receptacle, until the board's own
+# STEP model replaces it.
+cad_part(
+    name = "board_standin",
+    src = "board_standin.py",
+    params = _PARAMS,
+)
+
+cad_assembly(
+    name = "tray_with_board",
+    parts = {
+        ":board_standin": board_placement(),
+        ":tray": "{}",
+    },
+)
+
+# The board's holes land on the bosses, and its outline keeps clear of the
+# walls and the panel's posts.
+pcb_fit_test(
+    name = "board_fit_test",
+    size = "small",
+    board = ":board_standin",
+    board_placement = board_placement(),
+    enclosure = ":tray",
+    min_clearance_mm = "0.8",
+)
+
+interference_test(
+    name = "tray_interference_test",
+    size = "small",
+    assembly = ":tray_with_board",
+)
+
+# Printable: walls of 1.5 mm or more (a 0.4 mm nozzle lays four lines), and
+# small enough for any printer's bed.
+cad_check_test(
+    name = "tray_check_test",
+    size = "small",
+    max_size = [
+        "50",
+        "50",
+        "20",
+    ],
+    min_wall = "1.5",
+    part = ":tray",
+)
+
+cad_render(
+    name = "tray_views",
+    src = ":tray_with_board",
+)
+
+determinism_test(
+    name = "tray_determinism_test",
+    size = "small",
+    target = ":tray",
+)
