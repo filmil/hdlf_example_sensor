@@ -3,21 +3,21 @@
 aluminium:
 
 1. clear the label's recess;
-2. cut the screw and LED holes through, in 0.5 mm steps;
+2. mill the screw and LED holes with a helix, 0.5 mm a turn, so the tool
+   never plunges straight into the metal;
 3. cut the outline through, 0.2 mm into the spoilboard, with holding tabs,
    so the panel stays in the plate until a person cuts it free.
 
 Feeds are for a hobby router in 6061 aluminium: 18000 rpm, 400 mm/min
-across, 100 mm/min down, 0.5 mm per pass. Every pass enters with a straight
-0.5 mm plunge, which a center-cutting single-flute end mill takes at
-100 mm/min. FreeCAD 1.1 has no ramp entry dressup. Its Helix operation
-would enter the holes without a plunge, but it leaves each hole with a
-rapid to the hole's center at full depth, which gcode_check_test refuses
-(https://github.com/filmil/bazel_rules_cam/issues/31).
+across, 100 mm/min down, 0.5 mm per pass. The outline's passes enter with
+a straight 0.5 mm plunge, in the waste outside the panel: FreeCAD 1.1 has
+no ramp entry dressup. tools.json caps every pass at 0.6 mm
+(max_stepdown), which gcode_check_test enforces.
 """
 
 import FreeCAD
 import Path.Dressup.Tags as Tags
+import Path.Op.Helix as Helix
 import Path.Op.PocketShape as PocketShape
 import Path.Op.Profile as Profile
 
@@ -71,13 +71,19 @@ def operations(job, model, tools):
     # recess, which is not round: processCircles alone cuts the holes.
     base = [(model, flat_faces(model, lambda z: abs(z - top) < 1e-6))]
 
-    # 2. The holes.
-    holes = Profile.Create("Holes", parentJob=job)
+    # 2. The holes, by helix: their walls are the panel's round faces. Helix
+    #    leaves each hole with a rapid to its center at full depth, inside
+    #    the bore it cut, which gcode_check_test accepts (rules_cam 0.1.0).
+    #    The label recess's rounded corners are round faces too, but only
+    #    its depth deep; a hole's wall runs the panel's whole thickness.
+    walls = [
+        "Face%d" % (i + 1)
+        for i, f in enumerate(model.Shape.Faces)
+        if f.Surface.__class__.__name__ == "Cylinder" and f.BoundBox.ZLength > (top - bottom) - 1e-6
+    ]
+    holes = Helix.Create("Holes", parentJob=job)
     holes.ToolController = t1
-    holes.Base = base
-    holes.processHoles = False
-    holes.processCircles = True
-    holes.processPerimeter = False
+    holes.Base = [(model, walls)]
     through(holes, bottom)
 
     # 3. The outline, with tabs.
