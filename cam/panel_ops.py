@@ -108,5 +108,3 @@ def operations(job, model, tools):
     # cuts the panel free. FreeCAD's default is half the cut's depth.
     tabs.Width = 3.0
     tabs.Height = 0.7
-    # The dressup posts the outline, so the outline must not post again.
-    job.Operations.Group = [op for op in job.Operations.Group if op is not outline]
