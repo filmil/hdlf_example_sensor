@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+
+# The rules of every module load: a smoke test until the design arrives.
+build_test(
+    name = "modules_load_test",
+    size = "small",
+    targets = [
+        "@hdlf_rules_brep//brep:defs",
+        "@hdlf_rules_cam//cam:defs",
+        "@hdlf_rules_fab//fab:defs",
+        "@hdlf_rules_kicad//kicad:defs",
+        "@hdlf_rules_netlist//netlist:defs",
+    ],
+)
