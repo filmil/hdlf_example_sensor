@@ -7,7 +7,7 @@ Its frame is the tray's, at the panel's bottom: Z 0 is the face that rests
 on the tray's rim.
 """
 
-from build123d import Align, Box, Cylinder, Pos
+from build123d import Align, Axis, Box, Cylinder, Pos, fillet
 
 MIN = (Align.MIN, Align.MIN, Align.MIN)
 CTR = (Align.CENTER, Align.CENTER, Align.MIN)
@@ -22,5 +22,8 @@ def build(p):
     lx, ly = p["led"]
     panel -= Pos(lx, ly, -1) * Cylinder(p["panel_led_d"] / 2, t + 2, align=CTR)
     ll, lw, ld = p["panel_label_length"], p["panel_label_width"], p["panel_label_depth"]
-    panel -= Pos(ol / 2 - ll / 2, p["panel_label_y"] - lw / 2, t - ld) * Box(ll, lw, ld + 1, align=MIN)
+    # Its corners are rounded to the end mill's radius, as milled.
+    recess = Box(ll, lw, ld + 1, align=MIN)
+    recess = fillet(recess.edges().filter_by(Axis.Z), radius=p["panel_label_corner_r"])
+    panel -= Pos(ol / 2 - ll / 2, p["panel_label_y"] - lw / 2, t - ld) * recess
     return panel

@@ -1,23 +1,51 @@
 # SPDX-License-Identifier: Apache-2.0
 """The front panel's operations, with one 2 mm single-flute end mill in 2 mm
-aluminium: clear the label's recess, then cut the holes and the outline
-through, 0.2 mm into the spoilboard.
+aluminium:
+
+1. clear the label's recess;
+2. cut the screw and LED holes through, in 0.5 mm steps;
+3. cut the outline through, 0.2 mm into the spoilboard, with holding tabs,
+   so the panel stays in the plate until a person cuts it free.
 
 Feeds are for a hobby router in 6061 aluminium: 18000 rpm, 400 mm/min
-across, 100 mm/min down, 0.5 mm per pass.
+across, 100 mm/min down, 0.5 mm per pass. Every pass enters with a straight
+0.5 mm plunge, which a center-cutting single-flute end mill takes at
+100 mm/min. FreeCAD 1.1 has no ramp entry dressup. Its Helix operation
+would enter the holes without a plunge, but it leaves each hole with a
+rapid to the hole's center at full depth, which gcode_check_test refuses
+(https://github.com/filmil/bazel_rules_cam/issues/31).
 """
 
+import FreeCAD
+import Path.Dressup.Tags as Tags
 import Path.Op.PocketShape as PocketShape
 import Path.Op.Profile as Profile
 
 
-def flat_faces(model, z):
-    """The names of the model's flat faces at height z."""
+def flat_faces(model, keep):
+    """The names of the model's flat, horizontal faces whose height passes
+    keep(z)."""
     return [
         "Face%d" % (i + 1)
         for i, f in enumerate(model.Shape.Faces)
-        if f.BoundBox.ZLength < 1e-6 and abs(f.BoundBox.ZMin - z) < 1e-6
+        if f.BoundBox.ZLength < 1e-6 and keep(f.BoundBox.ZMin)
     ]
+
+
+def put(op, prop, value):
+    """Sets a depth property. FinalDepth and StepDown follow expressions
+    (the base face's height; the tool's diameter, from the setup sheet), and
+    a plain assignment loses to them on the next recompute: a StepDown so set
+    leaves the cut in passes as deep as the tool is wide. Clear the
+    expression first."""
+    op.setExpression(prop, None)
+    setattr(op, prop, value)
+
+
+def through(op, bottom):
+    """Cuts op to 0.2 mm below the plate, in 0.5 mm passes."""
+    put(op, "StepDown", "0.5 mm")
+    put(op, "FinalDepth", bottom - 0.2)
 
 
 def operations(job, model, tools):
@@ -28,26 +56,45 @@ def operations(job, model, tools):
 
     top = model.Shape.BoundBox.ZMax
     bottom = model.Shape.BoundBox.ZMin
+    inside = lambda z: bottom + 1e-6 < z < top - 1e-6
 
-    # The label's recess: its floor is the only flat face between the
-    # panel's bottom and top.
-    floors = [f for f in flat_faces(model, top - 0.3)]
+    # 1. The label's recess: its floor is the only flat face between the
+    #    panel's bottom and top, whatever its depth.
     label = PocketShape.Create("Label", parentJob=job)
     label.ToolController = t1
-    label.Base = [(model, floors)]
-    label.StepDown = "0.15 mm"
+    label.Base = [(model, flat_faces(model, inside))]
+    put(label, "StepDown", "0.15 mm")
 
-    # The holes and the outline, through. The bottom face's edges are the
-    # outline and the holes and nothing else (the label does not go through),
-    # and Profile cuts round holes only with processCircles.
-    cut = Profile.Create("Through", parentJob=job)
-    cut.ToolController = t1
-    cut.Base = [(model, flat_faces(model, bottom))]
-    cut.processHoles = True
-    cut.processCircles = True
-    cut.processPerimeter = True
-    cut.StepDown = "0.5 mm"
-    # FinalDepth follows an expression (the face's height); clear it, or
-    # FreeCAD sets it back on the next recompute.
-    cut.setExpression("FinalDepth", None)
-    cut.FinalDepth = bottom - 0.2
+    # The top face: a profile cuts from its base face down, so it must be
+    # the top one (from the bottom face, it would cut the plate in one
+    # full-depth pass). Its inner edges are the round holes and the label's
+    # recess, which is not round: processCircles alone cuts the holes.
+    base = [(model, flat_faces(model, lambda z: abs(z - top) < 1e-6))]
+
+    # 2. The holes.
+    holes = Profile.Create("Holes", parentJob=job)
+    holes.ToolController = t1
+    holes.Base = base
+    holes.processHoles = False
+    holes.processCircles = True
+    holes.processPerimeter = False
+    through(holes, bottom)
+
+    # 3. The outline, with tabs.
+    outline = Profile.Create("Outline", parentJob=job)
+    outline.ToolController = t1
+    outline.Base = base
+    outline.processHoles = False
+    outline.processCircles = False
+    outline.processPerimeter = True
+    through(outline, bottom)
+    # The tabs are placed along the outline's toolpath, so compute it first.
+    FreeCAD.ActiveDocument.recompute()
+    tabs = Tags.Create(outline)
+    # Four tabs, 3 mm wide and 0.5 mm of metal thick (their height counts
+    # from the cut's bottom, 0.2 mm below the plate): a saw or a knife
+    # cuts the panel free. FreeCAD's default is half the cut's depth.
+    tabs.Width = 3.0
+    tabs.Height = 0.7
+    # The dressup posts the outline, so the outline must not post again.
+    job.Operations.Group = [op for op in job.Operations.Group if op is not outline]

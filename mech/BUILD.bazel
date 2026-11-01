@@ -21,7 +21,6 @@ load(
     "USB",
     "board_holes",
     "board_placement",
-    "check_enclosure",
     "led_center",
     "outer_size",
     "panel_placement",
@@ -29,7 +28,6 @@ load(
     "post_centers",
 )
 
-check_enclosure()
 
 _PARAMS = params(
     board = BOARD,
@@ -99,11 +97,7 @@ interference_test(
 cad_check_test(
     name = "tray_check_test",
     size = "small",
-    max_size = [
-        "50",
-        "50",
-        "20",
-    ],
+    max_size = [str(x) for x in outer_size()],
     min_wall = "1.5",
     part = ":tray",
 )
@@ -142,26 +136,38 @@ interference_test(
     assembly = ":tray_with_plug_margin",
 )
 
-cad_part(
-    name = "usb_plug_over_margin",
-    src = "usb_plug.py",
-    params = _PARAMS | {"grow": json.encode(ENCLOSURE["usb_margin"] + 0.05)},
-)
-
-cad_assembly(
-    name = "tray_with_plug_over_margin",
-    parts = {
-        ":tray": "{}",
-        ":usb_plug_over_margin": board_placement(),
-    },
-)
-
-interference_test(
-    name = "usb_margin_upper_test",
-    size = "small",
-    assembly = ":tray_with_plug_over_margin",
-    expect = "overlap",
-)
+# One side at a time, so that each of the four sides is at its margin.
+[
+    (
+        cad_part(
+            name = "usb_plug_over_margin_" + name,
+            src = "usb_plug.py",
+            params = _PARAMS | {
+                "grow": json.encode(ENCLOSURE["usb_margin"] + 0.05),
+                "grow_side": json.encode(side),
+            },
+        ),
+        cad_assembly(
+            name = "tray_with_plug_over_margin_" + name,
+            parts = {
+                ":tray": "{}",
+                ":usb_plug_over_margin_" + name: board_placement(),
+            },
+        ),
+        interference_test(
+            name = "usb_margin_upper_" + name + "_test",
+            size = "small",
+            assembly = ":tray_with_plug_over_margin_" + name,
+            expect = "overlap",
+        ),
+    )
+    for name, side in [
+        ("left", "y-"),
+        ("right", "y+"),
+        ("bottom", "z-"),
+        ("top", "z+"),
+    ]
+]
 
 # The front panel, milled from 2 mm aluminium: it closes the tray.
 cad_part(
@@ -171,17 +177,25 @@ cad_part(
     visibility = ["//cam:__pkg__"],
 )
 
+cad_part(
+    name = "fasteners",
+    src = "fasteners.py",
+    params = _PARAMS,
+)
+
 cad_assembly(
     name = "enclosure",
     parts = {
         ":board_standin": board_placement(),
+        ":fasteners": "{}",
         ":panel": panel_placement(),
         ":tray": "{}",
         ":usb_plug": board_placement(),
     },
 )
 
-# The whole enclosure, closed, with the board and a cable's plug.
+# The whole enclosure, closed, with the board, a cable's plug, the panel's
+# screws and the light pipe: the panel's holes line up with the tray.
 interference_test(
     name = "enclosure_interference_test",
     size = "small",
@@ -192,11 +206,7 @@ interference_test(
 cad_check_test(
     name = "panel_check_test",
     size = "small",
-    max_size = [
-        "46",
-        "45",
-        "2",
-    ],
+    max_size = [str(x) for x in outer_size()[:2] + [PANEL["thickness"]]],
     min_wall = "1",
     part = ":panel",
 )
