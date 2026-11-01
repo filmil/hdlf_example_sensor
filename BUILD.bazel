@@ -1,7 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
 
-# The rules of every module load: a smoke test until the design arrives.
+# Every target and source file here is public, so that a module that
+# depends on this one (the manual, the book) can quote and build it.
+# https://github.com/filmil/hdlf_example_sensor/issues/11
+package(default_visibility = ["//visibility:public"])
+
+exports_files(glob(["*"]))
+
+# The rules of every module load.
 build_test(
     name = "modules_load_test",
     size = "small",
