@@ -18,6 +18,13 @@ bazel_dep(name = "hdlf_rules_cam", version = "0.0.1")
 
 bazel_dep(name = "bazel_skylib", version = "1.9.2", dev_dependency = True)
 
+# The CAD runners of hdlf_rules_brep and the SKiDL runner of
+# hdlf_rules_netlist are Python, on rules_python's hermetic interpreter.
+# .bazelrc sets its script bootstrap, without which rules_python starts
+# them through the host's python3; this makes that flag's label resolve.
+# 2.4.6 is the version the graph resolves already.
+bazel_dep(name = "rules_python", version = "2.4.6", dev_dependency = True)
+
 # The build runs on Bazel 9 (.bazelversion) and 8 (CI tests both). Under
 # Bazel 8, rules_python (used by hdlf_rules_netlist and hdlf_rules_brep)
 # asks for a C++ toolchain though nothing is compiled; the self-contained
