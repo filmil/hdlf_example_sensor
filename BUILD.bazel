@@ -8,7 +8,7 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files(glob(["*"]))
 
-# The rules of every module load: a smoke test until the design arrives.
+# The rules of every module load.
 build_test(
     name = "modules_load_test",
     size = "small",

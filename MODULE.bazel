@@ -21,14 +21,18 @@ bazel_dep(name = "hdlf_rules_cam", version = "0.1.0")
 # to load that package (issue #11).
 bazel_dep(name = "bazel_skylib", version = "1.9.2")
 
-# The CAD runners of hdlf_rules_brep and the SKiDL runner of
-# hdlf_rules_netlist are Python, on rules_python's hermetic interpreter.
-# .bazelrc sets its script bootstrap, without which rules_python starts
-# them through the host's python3; this makes that flag's label resolve.
-# 2.4.6 is the version the graph resolves already. It is a regular
-# dependency, not a dev one: pcb/BUILD.bazel loads py_binary from it, and a
-# module that depends on this one must be able to load that package
-# (issue #11).
+# The CAD runners of hdlf_rules_brep, the SKiDL runner of hdlf_rules_netlist
+# and the board's generator (//pcb) are Python, on rules_python's hermetic
+# interpreter. 2.4.6 is the version the graph resolves already.
+#
+# Two reasons to name it here:
+# - .bazelrc sets rules_python's script bootstrap, without which rules_python
+#   starts the runners through the host's python3; this makes that flag's
+#   label resolve. Bazel reads only the root module's .bazelrc, so a module
+#   that depends on this one must set the same flag in its own .bazelrc.
+# - pcb/BUILD.bazel loads py_binary from it. It is a regular dependency, not
+#   a dev one, so that the package also loads when this module is someone
+#   else's dependency (issue #11).
 bazel_dep(name = "rules_python", version = "2.4.6")
 
 # KiCad's symbol and footprint libraries (the PCB generator reads the
