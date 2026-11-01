@@ -16,14 +16,22 @@ bazel_dep(name = "hdlf_rules_brep", version = "0.0.1")
 bazel_dep(name = "hdlf_rules_fab", version = "0.0.1")
 bazel_dep(name = "hdlf_rules_cam", version = "0.0.1")
 
-bazel_dep(name = "bazel_skylib", version = "1.9.2")
+bazel_dep(name = "bazel_skylib", version = "1.9.2", dev_dependency = True)
 
-# Under Bazel 8, rules_python (used by hdlf_rules_netlist and
-# hdlf_rules_brep) asks for a C++ toolchain though nothing is compiled; the
-# self-contained zig toolchain answers, so the host needs none.
-bazel_dep(name = "hermetic_cc_toolchain", version = "4.3.0")
+# The build runs on Bazel 9 (.bazelversion) and 8 (CI tests both). Under
+# Bazel 8, rules_python (used by hdlf_rules_netlist and hdlf_rules_brep)
+# asks for a C++ toolchain though nothing is compiled; the self-contained
+# zig toolchain answers, so the host needs none. Bazel 9 does not ask.
+bazel_dep(name = "hermetic_cc_toolchain", version = "4.3.0", dev_dependency = True)
 
-zig_toolchains = use_extension("@hermetic_cc_toolchain//toolchain:ext.bzl", "toolchains")
+zig_toolchains = use_extension(
+    "@hermetic_cc_toolchain//toolchain:ext.bzl",
+    "toolchains",
+    dev_dependency = True,
+)
 use_repo(zig_toolchains, "zig_sdk")
 
-register_toolchains("@zig_sdk//toolchain:linux_amd64_gnu.2.31")
+register_toolchains(
+    "@zig_sdk//toolchain:linux_amd64_gnu.2.31",
+    dev_dependency = True,
+)

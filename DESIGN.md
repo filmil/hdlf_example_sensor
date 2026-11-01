@@ -15,6 +15,9 @@ for real, and each part of it is built, checked and drawn by Bazel.
   and the microcontroller, the board's warm parts.
 * One status LED, seen through the front panel.
 * A programming header, if the microcontroller needs one.
+* The supporting parts each of these needs, as its datasheet says:
+  decoupling and bulk capacitors (within USB's limit on VBUS capacitance),
+  I²C pull-ups, the LED's resistor, and ESD protection on the USB lines.
 
 The circuit is written as code (SKiDL), and `netlist_parity_test` checks the
 board's connections against it. Every part is a real, orderable one, with
@@ -45,3 +48,10 @@ its LCSC number and datasheet; none is invented.
 * Its G-code, from FreeCAD's CAM for a GRBL router, checked against the
   machine by `gcode_check_test`. No machine runs it before a person checks
   it.
+
+## The manual
+
+The user manual of the hdlf_rules_* modules is written here, in LaTeX with
+the IEEEtran class, and built by Bazel with a pinned TeX distribution, like
+every other output. Its figures and listings come from this design's
+builds: renders, reports, G-code and BUILD files, not mock-ups.
