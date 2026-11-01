@@ -12,13 +12,17 @@ load(
     "interference_test",
     "pcb_fit_test",
 )
-load(":mechanics.bzl", "BOARD", "ENCLOSURE", "USB", "board_holes", "board_placement", "params")
+load(":mechanics.bzl", "BOARD", "ENCLOSURE", "SENSOR", "USB", "board_holes", "board_placement", "params", "post_centers")
 
 _PARAMS = params(
     board = BOARD,
     enclosure = ENCLOSURE,
+    sensor = SENSOR,
     usb = USB,
-) | {"holes": json.encode(board_holes())}
+) | {
+    "holes": json.encode(board_holes()),
+    "posts": json.encode(post_centers()),
+}
 
 cad_part(
     name = "tray",
@@ -34,11 +38,20 @@ cad_part(
     params = _PARAMS,
 )
 
+# A USB-C cable's plug at its largest, mated with the receptacle: placed
+# like the board, since it is drawn in the board's frame.
+cad_part(
+    name = "usb_plug",
+    src = "usb_plug.py",
+    params = _PARAMS,
+)
+
 cad_assembly(
     name = "tray_with_board",
     parts = {
         ":board_standin": board_placement(),
         ":tray": "{}",
+        ":usb_plug": board_placement(),
     },
 )
 
@@ -53,6 +66,8 @@ pcb_fit_test(
     min_clearance_mm = "0.8",
 )
 
+# Nothing overlaps, the mated plug included: a cable fits through the
+# tray's cut-out.
 interference_test(
     name = "tray_interference_test",
     size = "small",

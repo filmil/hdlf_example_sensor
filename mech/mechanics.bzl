@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The mechanical interface of the design: one source for the board and the
-enclosure, so they cannot drift apart.
+"""The mechanical interface of the design: one source for the numbers that
+the board, the enclosure and the front panel share. The enclosure and the
+panel read them now; the board's generator reads them from its own pull
+request on.
 
 All sizes are in mm. The board's frame: its lower-left corner at the
 origin, its bottom face at Z 0, X along its long side.
@@ -16,10 +18,23 @@ BOARD = {
 }
 
 # The USB-C receptacle: centered on the board's left (X 0) edge, on top.
+# A mating plug's overmold is at most 12.35 x 6.5 mm (USB Type-C cable and
+# connector specification, the plug's overmold envelope).
 USB = {
     "y": 12.5,
     "width": 8.94,  # the receptacle's body, across
     "height": 3.26,  # above the board's top
+    "length": 7.35,  # from the board's edge inwards
+    "plug_width": 12.35,
+    "plug_height": 6.5,
+    "plug_length": 20.0,  # the overmold, from the receptacle's mouth outwards
+}
+
+# The temperature and humidity sensor, on the board's top, at the end away
+# from the warm parts; the tray's vents face it.
+SENSOR = {
+    "x": 37.0,
+    "y": 12.5,
 }
 
 # The status LED, on the board's top, seen through the front panel.
@@ -36,7 +51,7 @@ def board_holes():
 # The enclosure: a printed tray, closed by the milled front panel.
 ENCLOSURE = {
     "wall": 2.0,
-    "floor": 2.0,
+    "floor": 2.4,
     "gap_x": 1.0,  # board to the tray's ends: the USB-C plug reaches the receptacle
     "gap_y": 8.0,  # board to the tray's sides: room for the panel's corner posts
     "boss_height": 4.0,  # floor to the board's bottom
@@ -44,8 +59,23 @@ ENCLOSURE = {
     "pilot_d": 2.2,  # M2.5 self-tapping into PETG
     "inner_height": 13.0,  # floor to the tray's rim
     "post_d": 6.0,  # the panel's screw posts, in the corners
-    "usb_margin": 0.6,  # around the receptacle, for the plug's overmold
+    "usb_margin": 0.4,  # around the plug's overmold
+    "pilot_depth": 0.8,  # into the floor, leaving 1.6 mm under it (min_wall 1.5)
+    "vent_count": 4,
+    "vent_pitch": 4.0,
+    "vent_width": 2.0,
+    "vent_height": 4.5,  # leaves 1.9 mm of rim above them (min_wall 1.5)
 }
+
+def post_centers():
+    """The front panel's screw posts, in the tray's frame (XY): one in each
+    inside corner, overlapping both walls by a third of its radius so that it
+    is part of them."""
+    e, b = ENCLOSURE, BOARD
+    ol = b["length"] + 2 * e["gap_x"] + 2 * e["wall"]
+    ow = b["width"] + 2 * e["gap_y"] + 2 * e["wall"]
+    c = e["wall"] + e["post_d"] / 2 * 2 / 3
+    return [[c, c], [ol - c, c], [c, ow - c], [ol - c, ow - c]]
 
 def board_placement():
     """Where the board sits in the tray's frame, as cad_assembly's JSON."""

@@ -17,5 +17,5 @@ def build(p):
     board = Box(L, W, T, align=MIN)
     for hx, hy in p["holes"]:
         board -= Pos(hx, hy, 0) * Cylinder(p["board_hole_d"] / 2, T, align=CTR)
-    usb = Pos(0, p["usb_y"] - p["usb_width"] / 2, T) * Box(7.35, p["usb_width"], p["usb_height"], align=MIN)
+    usb = Pos(0, p["usb_y"] - p["usb_width"] / 2, T) * Box(p["usb_length"], p["usb_width"], p["usb_height"], align=MIN)
     return board + usb
