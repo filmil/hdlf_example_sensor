@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """The mechanical interface of the design: one source for the numbers that
-the board, the enclosure and the front panel share. The enclosure and the
-panel read them now; the board's generator reads them from its own pull
-request on.
+the board, the enclosure and the front panel share. The enclosure reads them
+now; the board's generator and the front panel will, from their own pull
+requests on.
 
 All sizes are in mm. The board's frame: its lower-left corner at the
 origin, its bottom face at Z 0, X along its long side.
@@ -65,16 +65,25 @@ ENCLOSURE = {
     "vent_pitch": 4.0,
     "vent_width": 2.0,
     "vent_height": 4.5,  # leaves 1.9 mm of rim above them (min_wall 1.5)
+    "vent_above_board": 1.0,  # from the board's top to the vents' bottom
+    "post_pilot_depth": 8.0,  # the panel's screws, from the rim down
 }
+
+def outer_size():
+    """The tray's outside, [X, Y, Z] in mm."""
+    e, b = ENCLOSURE, BOARD
+    return [
+        b["length"] + 2 * e["gap_x"] + 2 * e["wall"],
+        b["width"] + 2 * e["gap_y"] + 2 * e["wall"],
+        e["floor"] + e["inner_height"],
+    ]
 
 def post_centers():
     """The front panel's screw posts, in the tray's frame (XY): one in each
     inside corner, overlapping both walls by a third of its radius so that it
     is part of them."""
-    e, b = ENCLOSURE, BOARD
-    ol = b["length"] + 2 * e["gap_x"] + 2 * e["wall"]
-    ow = b["width"] + 2 * e["gap_y"] + 2 * e["wall"]
-    c = e["wall"] + e["post_d"] / 2 * 2 / 3
+    ol, ow, _ = outer_size()
+    c = ENCLOSURE["wall"] + ENCLOSURE["post_d"] / 2 * 2 / 3
     return [[c, c], [ol - c, c], [c, ow - c], [ol - c, ow - c]]
 
 def board_placement():
