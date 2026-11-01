@@ -1,0 +1,230 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# The sensor board's PCB (issue #12; the parts are issue #5's). gen.py places the parts from the
+# circuit's netlist, mech/mechanics.bzl and KiCad's footprints; Freerouting
+# routes the board (hdlf_rules_kicad's kicad_autoroute) with JLCPCB's
+# 2-layer rules; the DRC with the same rules and netlist_parity_test decide
+# whether it is right.
+load("@hdlf_rules_fab//fab:defs.bzl", "fab_rules")
+load("@hdlf_rules_kicad//kicad:defs.bzl", "kicad_autoroute", "kicad_drc_test", "kicad_pcb", "kicad_render")
+load("@hdlf_rules_netlist//netlist:defs.bzl", "determinism_test", "netlist_parity_test")
+load("@rules_python//python:py_binary.bzl", "py_binary")
+load("@rules_python//python:py_test.bzl", "py_test")
+load("//mech:mechanics.bzl", "BOARD", "LED", "SENSOR", "USB", "board_holes")
+load(":pcb.bzl", "pcb_files", "spoiled_pcb")
+
+py_binary(
+    name = "spoil",
+    srcs = [
+        "sexpr.py",
+        "spoil.py",
+    ],
+    imports = ["."],
+    main = "spoil.py",
+)
+
+py_binary(
+    name = "gen",
+    srcs = [
+        "gen.py",
+        "placement.py",
+        "sexpr.py",
+    ],
+    imports = ["."],
+    main = "gen.py",
+)
+
+# The helpers' unit tests: S-expressions, rotation, slots, the netlist
+# reader, and the spoiler of the known-bad boards.
+py_test(
+    name = "pcb_test",
+    size = "small",
+    srcs = [
+        "gen.py",
+        "pcb_test.py",
+        "placement.py",
+        "sexpr.py",
+        "spoil.py",
+    ],
+    imports = ["."],
+    main = "pcb_test.py",
+)
+
+fab_rules(
+    name = "jlcpcb_rules",
+    stackup = "2L-1oz",
+    vendor = "jlcpcb",
+)
+
+_MECH = json.encode({
+    "BOARD": BOARD,
+    "LED": LED,
+    "SENSOR": SENSOR,
+    "USB": USB,
+    "holes": board_holes(),
+})
+
+# The placed board: parts, nets, outline, holes, slot and keep-outs; no
+# copper.
+pcb_files(
+    name = "placed_files",
+    board = "placed.kicad_pcb",
+    footprints = "@kicad_libs//:footprints",
+    mech = _MECH,
+    netlist = "//elec:netlist",
+    project = "placed.kicad_pro",
+)
+
+kicad_pcb(
+    name = "placed",
+    board = "placed.kicad_pcb",
+    design_rules = ":jlcpcb_rules",
+    netlist = "//elec:netlist",
+    project = "placed.kicad_pro",
+    deps = ["@kicad_libs//:standard"],
+)
+
+# The copper, by Freerouting, with JLCPCB's clearance. Its report
+# (output group "report") lists each net's tracks, lengths and vias.
+kicad_autoroute(
+    name = "sensor",
+    pcb = ":placed",
+)
+
+filegroup(
+    name = "routing_report",
+    srcs = [":sensor"],
+    output_group = "report",
+)
+
+# The board: sensor.kicad_pcb, routed.
+kicad_pcb(
+    name = "pcb",
+    board = ":sensor",
+    design_rules = ":jlcpcb_rules",
+    netlist = "//elec:netlist",
+    project = "placed.kicad_pro",
+    deps = ["@kicad_libs//:standard"],
+)
+
+kicad_drc_test(
+    name = "drc_test",
+    size = "small",
+    pcb = ":pcb",
+)
+
+netlist_parity_test(
+    name = "parity_test",
+    size = "small",
+    board = ":sensor",
+    netlist = "//elec:netlist",
+)
+
+# The USB data pair: D+ and D- within 1 mm of each other, on one layer,
+# without vias.
+py_test(
+    name = "usb_pair_test",
+    size = "small",
+    srcs = [
+        "pair_test.py",
+        "sexpr.py",
+    ],
+    args = ["$(rootpath :sensor)"],
+    data = [":sensor"],
+    imports = ["."],
+    main = "pair_test.py",
+)
+
+determinism_test(
+    name = "pcb_determinism_test",
+    size = "small",
+    target = ":sensor",
+)
+
+# The images: the placed board and the routed one.
+kicad_render(
+    name = "placed_render",
+    pcb = ":placed",
+)
+
+kicad_render(
+    name = "render",
+    pcb = ":pcb",
+)
+
+# The known-bad boards: the parity test must find what each spoils.
+[pcb_files(
+    name = "bad_%s_files" % bad,
+    bad = bad,
+    board = "bad_%s.kicad_pcb" % bad,
+    footprints = "@kicad_libs//:footprints",
+    mech = _MECH,
+    netlist = "//elec:netlist",
+    project = "bad_%s.kicad_pro" % bad,
+) for bad in [
+    "missing_net",
+    "short",
+]]
+
+netlist_parity_test(
+    name = "bad_missing_net_test",
+    size = "small",
+    board = "bad_missing_net.kicad_pcb",
+    netlist = "//elec:netlist",
+    want_error = "net I2C_SDA: pin U3.1 is on no net of the board",
+)
+
+netlist_parity_test(
+    name = "bad_short_test",
+    size = "small",
+    board = "bad_short.kicad_pcb",
+    netlist = "//elec:netlist",
+    want_error = "board net I2C_SDA: joins netlist nets I2C_SCL, I2C_SDA",
+)
+
+# A copper short: the pads' nets are right (parity cannot see it), but a
+# track on I2C_SDA joins the sensor's SDA pad (1) and its GND pad (2), the
+# next one along its row (the footprint turned 90 degrees: pads 1 to 3 at
+# Y = SENSOR y - 1.4, 0.95 mm apart). The routed board with that track
+# must fail the DRC with shorting_items. The track's side effects, a
+# solder mask bridge (it enters the GND pad's opening) and a crossing (the
+# GND track leaving that pad), are set to "ignore" in its project, so that
+# shorting_items is the one violation the test sees.
+_SHORT_Y = str(100.0 + BOARD["width"] - (SENSOR["y"] - 1.4))
+
+spoiled_pcb(
+    name = "bad_copper_short_board",
+    board = ":sensor",
+    end = [
+        str(100.0 + SENSOR["x"]),
+        _SHORT_Y,
+    ],
+    ignore = [
+        "solder_mask_bridge",
+        "tracks_crossing",
+    ],
+    net = "I2C_SDA",
+    out = "bad_copper_short.kicad_pcb",
+    out_project = "bad_copper_short.kicad_pro",
+    project = "placed.kicad_pro",
+    start = [
+        str(100.0 + SENSOR["x"] - 0.95),
+        _SHORT_Y,
+    ],
+)
+
+kicad_pcb(
+    name = "bad_copper_short_pcb",
+    board = "bad_copper_short.kicad_pcb",
+    design_rules = ":jlcpcb_rules",
+    netlist = "//elec:netlist",
+    project = "bad_copper_short.kicad_pro",
+    deps = ["@kicad_libs//:standard"],
+)
+
+kicad_drc_test(
+    name = "bad_copper_short_drc_test",
+    size = "small",
+    expect = "shorting_items",
+    pcb = ":bad_copper_short_pcb",
+)

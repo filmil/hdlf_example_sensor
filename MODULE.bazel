@@ -10,7 +10,7 @@ module(
 )
 
 # The hardware rules, from the filmil registry (.bazelrc).
-bazel_dep(name = "hdlf_rules_kicad", version = "0.0.1")
+bazel_dep(name = "hdlf_rules_kicad", version = "0.1.0")
 bazel_dep(name = "hdlf_rules_netlist", version = "0.0.1")
 bazel_dep(name = "hdlf_rules_brep", version = "0.0.1")
 bazel_dep(name = "hdlf_rules_fab", version = "0.0.1")
@@ -24,6 +24,15 @@ bazel_dep(name = "bazel_skylib", version = "1.9.2", dev_dependency = True)
 # them through the host's python3; this makes that flag's label resolve.
 # 2.4.6 is the version the graph resolves already.
 bazel_dep(name = "rules_python", version = "2.4.6", dev_dependency = True)
+
+# KiCad's symbol and footprint libraries (the PCB generator reads the
+# footprints), and its 3D models (the PCB's STEP model and renders), fetched
+# only when a build uses them.
+kicad = use_extension("@hdlf_rules_kicad//kicad:extensions.bzl", "kicad")
+use_repo(kicad, "kicad_libs")
+
+models = use_extension("@hdlf_rules_kicad//kicad:models.bzl", "models")
+use_repo(models, "kicad_models")
 
 # The build runs on Bazel 9 (.bazelversion) and 8 (CI tests both). Under
 # Bazel 8, rules_python (used by hdlf_rules_netlist and hdlf_rules_brep)

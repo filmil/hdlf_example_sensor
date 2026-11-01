@@ -35,12 +35,73 @@ assembly service does not fit.
 
 ## The board (hdlf_rules_kicad, hdlf_rules_fab)
 
-* About 40 × 25 mm, 2 layers, 1.6 mm thick.
-* Four M2.5 mounting holes, one at each corner.
+* 40 × 25 mm, 2 layers, 1.6 mm thick (`mech/mechanics.bzl`).
+* Four M2.5 mounting holes, one at each corner, with no copper within
+  their screw heads' reach.
 * The USB-C receptacle at one short edge; the sensor near the other.
 * DRC with JLCPCB's rules; Gerbers, drill files, positions and the BOM;
   a STEP model with the parts' 3D models; renders of both sides.
 * A JLCPCB assembly package, checked by `fab_package_test`.
+
+### How the board is made
+
+`pcb/gen.py` writes the placed board, `placed.kicad_pcb`, from three
+sources, so that none is copied by hand:
+
+* `//elec:netlist`: each part's footprint, value and fields, and each
+  pad's net;
+* `mech/mechanics.bzl`: the board's size, the holes, and where the USB-C
+  receptacle, the LED and the sensor sit;
+* KiCad 9.0.9's footprint libraries, placed as the library has them.
+
+Where each part goes is a reviewed table, `pcb/placement.py`.
+The placed board has no copper. Freerouting routes it
+(`kicad_autoroute` of hdlf_rules_kicad), with JLCPCB's clearance from the
+`fab_rules` file, into `sensor.kicad_pcb`. GND is tracks; the board has
+no copper pour (zone fill) in this version. The routing report,
+`sensor.routing.md` (`bazel build //pcb:routing_report`), lists each net's length on each layer, its tracks
+and its vias. The USB data pair runs on the top layer without vias, D+ and D- within
+1 mm of each other from the receptacle to the microcontroller
+(`usb_pair_test`). Full Speed USB would take far more skew; the limit
+keeps the pair a pair when the placement changes.
+
+Nothing the router writes is trusted on its own:
+
+* `drc_test`: KiCad's DRC with JLCPCB's 2-layer rules; an unconnected
+  item is an error.
+* `parity_test`: the board's nets join the pins the netlist's nets join.
+  Two known-bad boards, one with a pad on no net and one with two nets
+  joined, must fail it.
+* `pcb_determinism_test`: the same board from two configurations.
+* `bad_copper_short_drc_test`: the routed board with one more track,
+  joining the sensor's SDA and GND pads, must fail the DRC with
+  `shorting_items` (parity checks pads' nets, so it cannot see this).
+* `usb_pair_test` (above) and `pcb_test`, the generator's unit tests.
+
+### The sensor
+
+The HDC2080 measures the air, not the board, so its neighbourhood is
+kept cold (TI SNAS678C, section 11, "Layout"):
+
+* An Edge.Cuts slot between it and the LED and microcontroller, the
+  board's warm parts. Its tracks reach it around the slot's ends.
+* No track or via on the top layer between its two pad rows, nor on the
+  bottom layer under the package: keep-out rule areas that the router
+  and the DRC both honour. Its die-attach pad is soldered to a floating
+  pad, not to GND, as TI asks ("The DAP may be soldered to a floating
+  pad on the board, but the board pad should NOT be connected to GND",
+  section 11.2, page 33).
+
+Its footprint is KiCad's `Sensor_Humidity:Texas_S-PWSON-N6-HDC2080`,
+whose pads are 0.95 mm apart. TI's package outline gives the basic pitch
+as 1.0 mm (page 40, "4X 1"), and its land pattern labels the pads
+"(0.95) TYP" (page 41). The footprint follows the land pattern, which
+is what a board is made from; the difference is inside the package's
+pad tolerance.
+
+The USB-C receptacle is 3.31 mm tall above the board (GCT's drawing of
+the USB4105, revision B4, side view); `mechanics.bzl` carries that
+height for the enclosure.
 
 ## Mechanical (hdlf_rules_brep)
 
