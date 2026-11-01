@@ -3,15 +3,17 @@
 aluminium:
 
 1. clear the label's recess;
-2. mill the screw and LED holes with a helix, 0.5 mm a turn, so the tool
-   never plunges straight into the metal;
+2. mill the screw and LED holes with a helix, so the tool enters them
+   without a plunge (FreeCAD splits their 2.2 mm into 5 turns, 0.44 mm
+   each);
 3. cut the outline through, 0.2 mm into the spoilboard, with holding tabs,
    so the panel stays in the plate until a person cuts it free.
 
 Feeds are for a hobby router in 6061 aluminium: 18000 rpm, 400 mm/min
-across, 100 mm/min down, 0.5 mm per pass. The outline's passes enter with
-a straight 0.5 mm plunge, in the waste outside the panel: FreeCAD 1.1 has
-no ramp entry dressup. tools.json caps every pass at 0.6 mm
+across, 100 mm/min down, 0.5 mm per pass. The label's two 0.15 mm passes
+and the outline's 0.5 mm passes still enter with a straight plunge (the
+outline's in the waste outside the panel): FreeCAD 1.1 has no ramp entry
+dressup. tools.json caps every pass at 0.6 mm
 (max_stepdown), which gcode_check_test enforces.
 """
 
@@ -67,8 +69,7 @@ def operations(job, model, tools):
 
     # The top face: a profile cuts from its base face down, so it must be
     # the top one (from the bottom face, it would cut the plate in one
-    # full-depth pass). Its inner edges are the round holes and the label's
-    # recess, which is not round: processCircles alone cuts the holes.
+    # full-depth pass). Only the outline uses it.
     base = [(model, flat_faces(model, lambda z: abs(z - top) < 1e-6))]
 
     # 2. The holes, by helix: their walls are the panel's round faces. Helix
@@ -79,8 +80,13 @@ def operations(job, model, tools):
     walls = [
         "Face%d" % (i + 1)
         for i, f in enumerate(model.Shape.Faces)
-        if f.Surface.__class__.__name__ == "Cylinder" and f.BoundBox.ZLength > (top - bottom) - 1e-6
+        if f.Surface.__class__.__name__ == "Cylinder"
+        and abs(abs(f.Surface.Axis.z) - 1) < 1e-6
+        and f.BoundBox.ZLength > (top - bottom) - 1e-6
     ]
+    # An empty list would cut no holes, silently: fail instead.
+    if not walls:
+        raise ValueError("the panel has no through holes to mill")
     holes = Helix.Create("Holes", parentJob=job)
     holes.ToolController = t1
     holes.Base = [(model, walls)]
