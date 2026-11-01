@@ -75,14 +75,16 @@ gnd += p["R1"][2], p["R2"][2]
 
 # ESD protection on D+ and D- (USBLC6-2SC6, Doc ID 11265 p1): I/O1 on
 # pins 1 and 6, I/O2 on pins 3 and 4, VBUS on 5, GND on 2. Each pair is
-# one conductor inside, a flow-through: the receptacle's side (USB_DP_C,
-# USB_DM_C) on pins 1 and 3, the microcontroller's on 6 and 4, as two
+# one conductor inside, a flow-through: the receptacle's side (USB_DM_C,
+# USB_DP_C) on pins 1 and 3, the microcontroller's on 6 and 4, as two
 # nets each, so the board routes the lines through the part, not past it.
+# The two channels are alike; D- takes I/O1 and D+ I/O2, so that on the
+# board D- stays above D+ from the receptacle to the microcontroller.
 u4 = p["U4"]
-dp_c += u4[1]
-dp += u4[6]
-dm_c += u4[3]
-dm += u4[4]
+dm_c += u4[1]
+dm += u4[6]
+dp_c += u4[3]
+dp += u4[4]
 vbus += u4[5]
 gnd += u4[2]
 

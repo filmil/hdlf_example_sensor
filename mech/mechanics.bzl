@@ -23,7 +23,7 @@ BOARD = {
 USB = {
     "y": 12.5,
     "width": 8.94,  # the receptacle's body, across
-    "height": 3.26,  # above the board's top
+    "height": 3.31,  # above the board's top (GCT drawing USB4105 rev. B4, side view)
     "length": 7.35,  # from the board's edge inwards
     "plug_width": 12.35,
     "plug_height": 6.5,
