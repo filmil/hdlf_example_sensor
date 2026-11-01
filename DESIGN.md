@@ -24,7 +24,7 @@ board's connections against it. Every part is a real, orderable one, with
 its LCSC number and datasheet; none is invented.
 
 `elec/parts.py` lists the parts, as #5 chose them: an STM32F042F6P6
-(crystal-less USB), an XC6206P332MR regulator, an HDC2080 sensor at I²C
+(crystal-less USB), an XC6206P332MR-G regulator, an HDC2080 sensor at I²C
 address 0x40, a GCT USB4105 receptacle, a USBLC6-2SC6 for ESD, and 0603
 passives and LED. `elec/circuit.py` connects them, citing the datasheet
 page for each connection, and fails the build on any SKiDL ERC error or

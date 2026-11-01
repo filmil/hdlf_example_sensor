@@ -20,7 +20,7 @@ p = {}
 for spec in PARTS:
     # Every part on the bill of materials is orderable as it stands.
     if spec["bom"]:
-        missing = [k for k in ("LCSC", "MPN", "Manufacturer", "Datasheet") if not spec["fields"].get(k)]
+        missing = [k for k in ("LCSC", "MPN", "Manufacturer", "Datasheet") if not spec["fields"].get(k, "").strip()]
         if missing:
             raise ValueError("%s lacks %s" % (spec["ref"], ", ".join(missing)))
     part = Part(spec["lib"], spec["name"], ref=spec["ref"], tag=spec["ref"],
@@ -31,10 +31,18 @@ for spec in PARTS:
             part.datasheet = v
         else:
             part.fields[k] = v
+    # The board reads these: an unfitted part is DNP; a board feature that
+    # is no part stays off the bill of materials.
+    if not spec["fit"]:
+        part.fields["DNP"] = "DNP"
+    if not spec["bom"]:
+        part.fields["Exclude from BOM"] = "yes"
     p[spec["ref"]] = part
 
 # SKiDL's no-connect net, of the circuit the netlist is made from (the
 # runner gives each script a fresh one).
+# SKiDL has no import for it: its runner replaces builtins.default_circuit
+# for each script, so this reads the one in use.
 _nc = builtins.default_circuit.NC
 
 vbus = Net("VBUS")
@@ -47,12 +55,14 @@ scl = Net("I2C_SCL")
 
 # The USB-C receptacle (GCT USB4105 drawing, rev B4): both rows' VBUS, GND,
 # D+ and D- pins, so the plug fits either way up; the shell to GND. SBU1
-# and SBU2 carry nothing in USB 2.0.
+# and SBU2 carry nothing in USB 2.0. D+ and D- leave the receptacle on
+# USB_DP_C and USB_DM_C, to the ESD part below.
 j1 = p["J1"]
 vbus += j1["A4"], j1["A9"], j1["B4"], j1["B9"]
 gnd += j1["A1"], j1["A12"], j1["B1"], j1["B12"], j1["S1"]
-dp += j1["A6"], j1["B6"]
-dm += j1["A7"], j1["B7"]
+dp_c, dm_c = Net("USB_DP_C"), Net("USB_DM_C")
+dp_c += j1["A6"], j1["B6"]
+dm_c += j1["A7"], j1["B7"]
 j1["A8", "B8"] += _nc
 
 # CC1 and CC2 each to GND through Rd = 5.1 kOhm, so that a USB-C source
@@ -64,10 +74,15 @@ cc2 += j1["B5"], p["R2"][1]
 gnd += p["R1"][2], p["R2"][2]
 
 # ESD protection on D+ and D- (USBLC6-2SC6, Doc ID 11265 p1): I/O1 on
-# pins 1 and 6, I/O2 on pins 3 and 4, VBUS on 5, GND on 2.
+# pins 1 and 6, I/O2 on pins 3 and 4, VBUS on 5, GND on 2. Each pair is
+# one conductor inside, a flow-through: the receptacle's side (USB_DP_C,
+# USB_DM_C) on pins 1 and 3, the microcontroller's on 6 and 4, as two
+# nets each, so the board routes the lines through the part, not past it.
 u4 = p["U4"]
-dp += u4[1], u4[6]
-dm += u4[3], u4[4]
+dp_c += u4[1]
+dp += u4[6]
+dm_c += u4[3]
+dm += u4[4]
 vbus += u4[5]
 gnd += u4[2]
 
@@ -104,7 +119,9 @@ v3 += p["JP1"][2]
 # I2C1: SDA on PF0 (pin 2), SCL on PF1 (pin 3) (Table 13 p33).
 sda += u1["PF0"]
 scl += u1["PF1"]
-# SWD on PA13 (pin 19, SWDIO) and PA14 (pin 20, SWCLK), to J2.
+# SWD on PA13 (pin 19, SWDIO) and PA14 (pin 20, SWCLK), to J2, the
+# 4-pin header the spec asks for. NRST is not on it: a part whose firmware
+# turns SWD off is recovered over USB DFU, by closing JP1.
 swdio, swclk = Net("SWDIO"), Net("SWCLK")
 swdio += u1["PA13"]
 swclk += u1["PA14"]
@@ -138,8 +155,10 @@ drdy += u3["DRDY"]
 # The microcontroller's other pins are free.
 for pin in ["PA1", "PA2", "PA3", "PA5", "PA6", "PA7", "PB1"]:
     u1[pin] += _nc
-# The sensor's exposed pad is a no-connect pin in KiCad's symbol; on the
-# board it is soldered (p40, note 3).
+# The sensor's exposed pad: soldered to a floating pad, "but the board pad
+# should NOT be connected to GND" (SNAS678C §11.2 p33; soldered, p40 note
+# 3). KiCad's symbol makes it a no-connect, and the board leaves it on no
+# net.
 u3["EP"] += _nc
 
 # SKiDL's electrical rule check; any error or warning fails the build.
