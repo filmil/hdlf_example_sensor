@@ -34,17 +34,22 @@ its LCSC number and datasheet; none is invented.
 
 ## Mechanical (hdlf_rules_brep)
 
+`mech/mechanics.bzl` holds the numbers the board and the enclosure share:
+the board's size and holes, and where the USB-C receptacle and the LED
+are. Both sides read them, so they cannot drift apart.
+
 * A 3D-printed enclosure: a tray with four bosses for the board's screws, a
   cut-out for the USB-C plug, and vents by the sensor.
-* A lid that closes it.
+* Closed by the front panel, which screws to four posts in the tray's
+  corners. The tray is wider than the board so the posts keep clear of it.
 * `pcb_fit_test`: the board's holes land on the bosses, and nothing of it
   touches the walls. `interference_test`: no two parts overlap.
   `cad_check_test`: the walls are thick enough to print.
 
 ## The front panel (hdlf_rules_brep, hdlf_rules_cam)
 
-* A 2 mm aluminium plate on the enclosure's front, with a light pipe hole
-  for the LED and an engraved name.
+* A 2 mm aluminium plate that closes the tray: four holes for its screws,
+  a hole over the LED, and an engraved name.
 * Its G-code, from FreeCAD's CAM for a GRBL router, checked against the
   machine by `gcode_check_test`. No machine runs it before a person checks
   it.
