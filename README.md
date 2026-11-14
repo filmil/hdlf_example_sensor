@@ -28,6 +28,25 @@ bazel test //...
 The modules come from the filmil registry, which `.bazelrc` names before
 the Bazel Central Registry.
 
+## Releasing
+
+Pushing a tag `v*` (or running the Release workflow by hand with an
+existing `v*` tag that has no release yet) runs `bazel test //...` and
+publishes the board's fab outputs as a GitHub release. The assets are
+named `sensor-*`:
+
+- the JLCPCB package;
+- the BOM, as CSV and as Markdown;
+- the placement list;
+- the Gerbers and the drill file, each as a `.tar.gz`;
+- the fab summary, which is also the release's notes;
+- the STEP model;
+- the renders;
+- `SHA256SUMS`.
+
+A tag with a hyphen, such as `v0.1.0-rc1`, is a pre-release. The panel's
+G-code is not released.
+
 ## License
 
 Apache License 2.0 (`LICENSE`). The tools and libraries the build downloads
