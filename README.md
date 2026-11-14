@@ -28,6 +28,15 @@ bazel test //...
 The modules come from the filmil registry, which `.bazelrc` names before
 the Bazel Central Registry.
 
+## Releasing
+
+Pushing a tag `v*` (or running the Release workflow by hand with an
+existing tag) builds the board's fab outputs, checks the JLCPCB package,
+and publishes them as a GitHub release with their SHA-256 sums: the
+JLCPCB package, the BOM, the placement list, the Gerbers and drill file,
+the fab summary (also the release's notes), the STEP model and the
+renders. The panel's G-code is not released.
+
 ## License
 
 Apache License 2.0 (`LICENSE`). The tools and libraries the build downloads

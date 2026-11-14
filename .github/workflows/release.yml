@@ -1,0 +1,82 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# The board's fab outputs as a GitHub release (issue #19): the JLCPCB
+# package, the BOM and placement list, the Gerbers and drill file, the
+# fab summary, the STEP model and the renders, with their SHA-256 sums.
+# The panel's G-code is not released: no machine runs it before a person
+# checks it.
+#
+# A tag v* releases it; so does a manual run, given an existing tag. A
+# pull request that changes this file builds the assets and keeps them as
+# the run's artifact, without releasing anything.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The existing tag to release, such as v0.1.0"
+        required: true
+  pull_request:
+    paths: [".github/workflows/release.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      - name: Cache Bazel downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/bazel-repo
+            ~/.cache/bazelisk
+          key: bazel-release-${{ hashFiles('MODULE.bazel', '.bazelversion', '.bazelrc') }}
+          restore-keys: bazel-
+      - name: Build and check the fab outputs
+        run: |
+          bazelisk build --repository_cache=$HOME/.cache/bazel-repo //pcb:fab_outputs
+          bazelisk test --repository_cache=$HOME/.cache/bazel-repo //pcb:jlcpcb_test //pcb:fab_determinism_test
+      - name: Assemble the assets
+        run: |
+          set -euo pipefail
+          rm -rf dist && mkdir dist
+          # Each output under pcb/, named sensor-<its path, / as ->; a
+          # directory as a .tar.gz with fixed names, dates and owners.
+          bazelisk cquery --repository_cache=$HOME/.cache/bazel-repo --output=files //pcb:fab_outputs \
+            2>/dev/null | sort | while read -r f; do
+            rel=${f#*/bin/pcb/}
+            name="sensor-${rel//\//-}"
+            if [ -d "$f" ]; then
+              tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
+                --mode=a+rX,u+w,go-w -C "$f" -cf - . | gzip -n > "dist/$name.tar.gz"
+            else
+              cp "$f" "dist/$name"
+              chmod 0644 "dist/$name"
+            fi
+          done
+          (cd dist && sha256sum -- * > SHA256SUMS)
+          cat dist/SHA256SUMS
+      - name: Keep the assets (pull request)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: dist/
+      - name: Release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" --verify-tag --title "hdlf_example_sensor $TAG" \
+            --notes-file dist/sensor-fab_summary.md dist/*
