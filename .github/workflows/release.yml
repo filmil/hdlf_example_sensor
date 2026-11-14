@@ -1,14 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # The board's fab outputs as a GitHub release (issue #19): the JLCPCB
-# package, the BOM and placement list, the Gerbers and drill file, the
-# fab summary, the STEP model and the renders, with their SHA-256 sums.
-# The panel's G-code is not released: no machine runs it before a person
-# checks it.
+# package, the BOM and placement list, the Gerbers and drill file (as
+# .tar.gz), the fab summary, the STEP model and the renders, each named
+# sensor-*, with SHA256SUMS. The panel's G-code is not released: no machine
+# runs it before a person checks it, and the assembly fails on a G-code
+# file.
 #
-# A tag v* releases it; so does a manual run, given an existing tag. A
-# pull request that changes this file builds the assets and keeps them as
-# the run's artifact, without releasing anything.
+# A tag v* releases it; so does a manual run, given an existing tag v*
+# that has no release yet. A tag with a hyphen (v0.1.0-rc1) is a
+# pre-release. A pull request that touches the board, the modules or this
+# file builds the assets and keeps them as the run's artifact, without
+# releasing anything.
 name: Release
 
 on:
@@ -20,21 +23,38 @@ on:
         description: "The existing tag to release, such as v0.1.0"
         required: true
   pull_request:
-    paths: [".github/workflows/release.yml"]
+    paths:
+      - ".github/workflows/release.yml"
+      - "pcb/**"
+      - "elec/**"
+      - "mech/**"
+      - "MODULE.bazel"
+      - ".bazelrc"
+      - ".bazelversion"
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  LC_ALL: C
 
 jobs:
-  release:
+  assets:
     runs-on: ubuntu-latest
-    env:
-      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
+      - name: Check the tag
+        if: github.event_name != 'pull_request'
+        run: |
+          case "$TAG" in
+            v*) ;;
+            *) echo "tag $TAG: want v*, such as v0.1.0" >&2; exit 1 ;;
+          esac
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          # The tag itself, never a branch of the same name.
+          ref: ${{ github.event_name == 'pull_request' && github.ref || format('refs/tags/{0}', env.TAG) }}
       - name: Cache Bazel downloads
         uses: actions/cache@v4
         with:
@@ -43,40 +63,70 @@ jobs:
             ~/.cache/bazelisk
           key: bazel-release-${{ hashFiles('MODULE.bazel', '.bazelversion', '.bazelrc') }}
           restore-keys: bazel-
-      - name: Build and check the fab outputs
-        run: |
-          bazelisk build --repository_cache=$HOME/.cache/bazel-repo //pcb:fab_outputs
-          bazelisk test --repository_cache=$HOME/.cache/bazel-repo //pcb:jlcpcb_test //pcb:fab_determinism_test
-      - name: Assemble the assets
+      - name: Test
+        run: bazelisk test --repository_cache=$HOME/.cache/bazel-repo //...
+      - name: Assemble the assets, twice
         run: |
           set -euo pipefail
-          rm -rf dist && mkdir dist
+          files=$(bazelisk cquery --repository_cache=$HOME/.cache/bazel-repo --noshow_progress \
+            --ui_event_filters=-info,-progress --output=files //pcb:fab_outputs | sort)
           # Each output under pcb/, named sensor-<its path, / as ->; a
-          # directory as a .tar.gz with fixed names, dates and owners.
-          bazelisk cquery --repository_cache=$HOME/.cache/bazel-repo --output=files //pcb:fab_outputs \
-            2>/dev/null | sort | while read -r f; do
-            rel=${f#*/bin/pcb/}
-            name="sensor-${rel//\//-}"
-            if [ -d "$f" ]; then
-              tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
-                --mode=a+rX,u+w,go-w -C "$f" -cf - . | gzip -n > "dist/$name.tar.gz"
-            else
-              cp "$f" "dist/$name"
-              chmod 0644 "dist/$name"
-            fi
-          done
-          (cd dist && sha256sum -- * > SHA256SUMS)
+          # directory as a .tar.gz with fixed order, names, dates and owners.
+          assemble() {
+            rm -rf "$1" && mkdir "$1"
+            for f in $files; do
+              case "$f" in
+                */bin/pcb/*) rel=${f#*/bin/pcb/} ;;
+                *) echo "$f: not an output of //pcb" >&2; exit 1 ;;
+              esac
+              name="sensor-${rel//\//-}"
+              [ -d "$f" ] && name="$name.tar.gz"
+              case "$name" in
+                *.gcode|*.nc|*.ngc|*.tap|*.cnc)
+                  echo "$f: G-code is not released" >&2; exit 1 ;;
+              esac
+              if [ -e "$1/$name" ]; then
+                echo "$f: a second asset named $name" >&2; exit 1
+              fi
+              if [ -d "$f" ]; then
+                tar --format=gnu --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
+                  --mode=a+rX,u+w,go-w -C "$f" -cf - . | gzip -n > "$1/$name"
+              else
+                cp "$f" "$1/$name"
+                chmod 0644 "$1/$name"
+              fi
+            done
+            (cd "$1" && sha256sum -- * > SHA256SUMS)
+          }
+          assemble dist
+          assemble dist2
+          cmp dist/SHA256SUMS dist2/SHA256SUMS
+          [ -s dist/sensor-fab_summary.md ] || { echo "no fab summary" >&2; exit 1; }
           cat dist/SHA256SUMS
-      - name: Keep the assets (pull request)
-        if: github.event_name == 'pull_request'
+      - name: Keep the assets
         uses: actions/upload-artifact@v4
         with:
           name: release-assets
           path: dist/
+
+  release:
+    needs: assets
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Fetch the assets
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist
       - name: Release
-        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$TAG" --verify-tag --title "hdlf_example_sensor $TAG" \
-            --notes-file dist/sensor-fab_summary.md dist/*
+          set -euo pipefail
+          pre=()
+          case "$TAG" in *-*) pre=(--prerelease) ;; esac
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag "${pre[@]}" \
+            --title "hdlf_example_sensor $TAG" --notes-file dist/sensor-fab_summary.md dist/*

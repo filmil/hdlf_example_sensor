@@ -31,11 +31,21 @@ the Bazel Central Registry.
 ## Releasing
 
 Pushing a tag `v*` (or running the Release workflow by hand with an
-existing tag) builds the board's fab outputs, checks the JLCPCB package,
-and publishes them as a GitHub release with their SHA-256 sums: the
-JLCPCB package, the BOM, the placement list, the Gerbers and drill file,
-the fab summary (also the release's notes), the STEP model and the
-renders. The panel's G-code is not released.
+existing `v*` tag that has no release yet) runs `bazel test //...` and
+publishes the board's fab outputs as a GitHub release. The assets are
+named `sensor-*`:
+
+- the JLCPCB package;
+- the BOM, as CSV and as Markdown;
+- the placement list;
+- the Gerbers and the drill file, each as a `.tar.gz`;
+- the fab summary, which is also the release's notes;
+- the STEP model;
+- the renders;
+- `SHA256SUMS`.
+
+A tag with a hyphen, such as `v0.1.0-rc1`, is a pre-release. The panel's
+G-code is not released.
 
 ## License
 
