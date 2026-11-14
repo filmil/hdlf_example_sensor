@@ -3,7 +3,8 @@
 # A worked example of the hdlf_rules_* modules: a USB-C sensor board in a
 # 3D-printed enclosure, with a milled aluminium front panel. Every output
 # (schematic-level netlist, board, fab package, enclosure parts, the
-# panel's G-code, the user manual) is built hermetically by Bazel.
+# panel's G-code) is built hermetically by Bazel; the user manual will be
+# too, once it lands.
 module(
     name = "hdlf_example_sensor",
     version = "0.0.0",
@@ -27,9 +28,11 @@ bazel_dep(name = "bazel_skylib", version = "1.9.2")
 #
 # Two reasons to name it here:
 # - .bazelrc sets rules_python's script bootstrap, without which rules_python
-#   starts the runners through the host's python3; this makes that flag's
-#   label resolve. Bazel reads only the root module's .bazelrc, so a module
-#   that depends on this one must set the same flag in its own .bazelrc.
+#   starts brep's CAD runners and the board's generator through the host's
+#   python3 (the SKiDL runner sets the script bootstrap itself); this makes
+#   that flag's label resolve. Bazel reads only the root module's .bazelrc,
+#   so a module that depends on this one must set the same flag in its own
+#   .bazelrc.
 # - pcb/BUILD.bazel loads py_binary from it. It is a regular dependency, not
 #   a dev one, so that the package also loads when this module is someone
 #   else's dependency (issue #11).

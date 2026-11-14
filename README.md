@@ -14,7 +14,7 @@ real:
 | [hdlf_rules_netlist](https://github.com/filmil/bazel_rules_netlist) | the circuit, written as code (SKiDL) |
 | [hdlf_rules_kicad](https://github.com/filmil/bazel_rules_kicad) | the board: DRC, fab outputs, STEP, renders |
 | [hdlf_rules_fab](https://github.com/filmil/bazel_rules_fab) | the JLCPCB assembly package |
-| [hdlf_rules_brep](https://github.com/filmil/bazel_rules_brep) | the enclosure, the lid and the front panel |
+| [hdlf_rules_brep](https://github.com/filmil/bazel_rules_brep) | the enclosure: its tray and its front panel |
 | [hdlf_rules_cam](https://github.com/filmil/bazel_rules_cam) | the front panel's G-code |
 
 ## Building

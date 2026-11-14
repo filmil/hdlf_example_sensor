@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # The sensor board's circuit (issue #5): a SKiDL script, its netlist, and
-# the netlist the same in two configurations. netlist_parity_test checks
-# the board against it once the board is here.
+# the netlist the same in two configurations. The board's
+# parity_test (//pcb, a netlist_parity_test) checks the board against it.
 load("@hdlf_rules_netlist//netlist:defs.bzl", "determinism_test", "skidl_netlist")
 
 # Every target and source file here is public, so that a module that

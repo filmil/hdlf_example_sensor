@@ -1,8 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The mechanical interface of the design: one source for the numbers that
-the board, the enclosure and the front panel share. The enclosure reads them
-now; the board's generator and the front panel will, from their own pull
-requests on.
+the board, the enclosure and the front panel share. The enclosure, the
+board's generator (//pcb) and the front panel read them.
 
 All sizes are in mm. The board's frame: its lower-left corner at the
 origin, its bottom face at Z 0, X along its long side.

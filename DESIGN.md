@@ -125,8 +125,8 @@ height for the enclosure.
 `mech/mechanics.bzl` holds the numbers the board, the enclosure and the
 front panel share: the board's size and holes, where the USB-C receptacle,
 the sensor and the LED are, the largest USB-C plug, and the panel's screw
-posts. The enclosure reads them; the board's generator and the panel will
-too, so they cannot drift apart.
+posts. The enclosure, the board's generator and the panel read them, so
+they cannot drift apart.
 
 * A 3D-printed enclosure: a tray with four bosses for the board's screws, a
   cut-out for the USB-C plug, and vents by the sensor.
@@ -148,7 +148,7 @@ too, so they cannot drift apart.
 
 ## The manual
 
-The user manual of the hdlf_rules_* modules is written here, in LaTeX with
-the IEEEtran class, and built by Bazel with a pinned TeX distribution, like
-every other output. Its figures and listings come from this design's
+The user manual of the hdlf_rules_* modules will be written here, in LaTeX
+with the IEEEtran class, and built by Bazel with a pinned TeX distribution,
+like every other output. It is not in the tree yet. Its figures and listings come from this design's
 builds: renders, reports, G-code and BUILD files, not mock-ups.
