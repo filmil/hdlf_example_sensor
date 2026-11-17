@@ -7,7 +7,7 @@ issue [#14](https://github.com/filmil/hdlf_example_sensor/issues/14). So
 far it is the toolchain's proof: a binary that starts and sleeps.
 
 ```sh
-bazel build //fw:fw //fw:fw_bin   # the ELF, and fw.bin, the raw flash image
+bazel build //fw:fw //fw:fw_bin   # fw.elf, and fw.bin, the raw flash image
 bazel test //fw/...
 ```
 
@@ -20,11 +20,13 @@ bazel test //fw/...
   builds each from its `.crate` file, pinned by `Cargo.lock`'s checksum.
   To change them, edit `Cargo.toml` and run
   `CARGO_BAZEL_REPIN=1 bazel mod tidy`.
-- **`:fw`** builds for the platform `:stm32f042` whatever the build's own
-  platform, so `bazel build //...` on a PC builds it too. It links with
-  cortex-m-rt's `link.x` and this directory's `memory.x`, with
-  `opt-level=z`, one codegen unit, fat LTO (set in `.bazelrc`) and
-  `panic=abort`.
+- **`:fw`** is `fw.elf`: the `firmware` rule (`firmware.bzl`) builds
+  `:fw_code` and every crate under it for the platform `:stm32f042`, in
+  opt mode, with fat LTO, `opt-level=z`, one codegen unit and
+  `panic=abort`, whatever the command line's mode. `bazel build //...` on
+  a PC builds it too, and skips `:fw_code` itself. It links with
+  cortex-m-rt's `link.x` and this directory's `memory.x`. rules_rust
+  remaps the build's paths, so none reaches the ELF.
 - **`:fw_bin`** is `fw.bin`, the image a DFU flash writes, made by
   `tools:elf2bin`.
 
@@ -38,13 +40,19 @@ directory, which the link step does see.
 
 | Test | Checks |
 |---|---|
-| `:budget_test` | The ELF fits 32 KB of flash and 6 KB of RAM, and prints the margin. The same firmware on a chip one byte too small must fail. |
+| `:budget_test` | The ELF fits 32 KB of flash and 6 KB of RAM with at least 1 KB left for the stack, and prints the margin. The same firmware on a chip one byte too small, in flash or in RAM, must fail. The vector table is sound, and `fw.bin` is the ELF's image. |
 | `:fw_determinism_test` | The ELF and `fw.bin` are the same bytes from two configurations. |
-| `:licence_test` | Every crate of `Cargo.lock` is in `crate_licences.txt`, at its version, with a licence the project accepts: MIT, Apache-2.0, BSD, Zlib, or an OR that offers one. |
-| `tools:elf_test` | The ELF reader, on a small ELF the test writes byte by byte. |
+| `:licence_test` | Every crate of `Cargo.lock` is in `crate_licences.txt`, once, at its version, and its SPDX expression offers MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause or Zlib. The one exception is unicode-ident: it is `(MIT OR Apache-2.0) AND Unicode-3.0`, and accepted because it only runs on the build machine, inside proc macros. |
+| `tools:elf_test` | The ELF reader, on small ELF files the test writes byte by byte, malformed ones included. |
 
-`crate_licences.txt` comes from crates.io's metadata for each locked
-version. A change to `Cargo.lock` must update it, or the test fails.
+`crate_licences.txt` holds the `license` of each crate's own
+`Cargo.toml`. A change to `Cargo.lock` must update it, or the test fails.
+
+Every approved crate is a dependency of `:fw_code` already, so this PR
+shows each one builds for the Cortex-M0. The Cortex-M0 has no atomic
+compare-and-swap, so `Cargo.toml` turns on portable-atomic's
+`critical-section` feature, which cortex-m's single-core critical
+section serves.
 
 ## Where the downloads come from
 

@@ -5,6 +5,7 @@
 # and sleeps, its raw flash image, and the checks every later firmware PR
 # keeps: the flash and RAM budget, determinism, and the crates' licences.
 load("@hdlf_rules_netlist//netlist:defs.bzl", "determinism_test")
+load(":firmware.bzl", "firmware")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
@@ -22,25 +23,45 @@ platform(
     ],
 )
 
-# The firmware ELF, for the STM32F042F6 whatever the build's platform.
+# The firmware's code. Built only for the chip: a host build skips it.
+# :fw is what to build.
 rust_binary(
-    name = "fw",
+    name = "fw_code",
     srcs = ["src/main.rs"],
     compile_data = ["memory.x"],
-    platform = ":stm32f042",
+    crate_name = "fw",
     rustc_flags = [
-        "-Copt-level=z",
-        "-Ccodegen-units=1",
-        "-Cpanic=abort",
         "-Clink-arg=-Tlink.x",
         "-Clink-arg=-L" + package_name(),
     ],
+    target_compatible_with = [
+        "@platforms//cpu:armv6-m",
+        "@platforms//os:none",
+    ],
+    visibility = ["//visibility:private"],
     deps = [
         "@crates//:cortex-m",
         "@crates//:cortex-m-rt",
+        "@crates//:embassy-executor",
+        "@crates//:embassy-futures",
         "@crates//:embassy-stm32",
+        "@crates//:embassy-sync",
+        "@crates//:embassy-time",
+        "@crates//:embassy-usb",
+        "@crates//:embedded-hal",
+        "@crates//:embedded-hal-async",
+        "@crates//:heapless",
         "@crates//:panic-halt",
+        "@crates//:static_cell",
     ],
+)
+
+# The firmware ELF, fw.elf: :fw_code for the STM32F042F6 in opt mode,
+# with fat LTO, opt-level z and panic=abort in every crate (firmware.bzl).
+firmware(
+    name = "fw",
+    binary = ":fw_code",
+    platform = ":stm32f042",
 )
 
 # The raw flash image, for DFU: fw.bin.
@@ -52,13 +73,20 @@ genrule(
     tools = ["//fw/tools:elf2bin"],
 )
 
-# The ELF fits 32 KB of flash and 6 KB of RAM; a 1 KB chip fails.
+# The ELF fits 32 KB of flash and 6 KB of RAM with 1 KB of stack; a chip
+# one byte short fails; the vector table is sound; fw.bin is its image.
 rust_test(
     name = "budget_test",
     size = "small",
     srcs = ["test/budget_test.rs"],
-    data = [":fw"],
-    env = {"FW_ELF": "$(rootpath :fw)"},
+    data = [
+        ":fw",
+        ":fw_bin",
+    ],
+    env = {
+        "FW_BIN": "$(rootpath :fw_bin)",
+        "FW_ELF": "$(rootpath :fw)",
+    },
     deps = ["//fw/tools:elf"],
 )
 

@@ -5,11 +5,11 @@
 //
 // Check every upstream file (what agents run; this is the default):
 //
-//	bazel run //tools:mirror
+//	bazel run //tools/mirror
 //
 // Upload (the operator only; it needs gh, logged in with write access):
 //
-//	bazel run //tools:mirror -- --dry_run=false --built_dir=/path/to/built
+//	bazel run //tools/mirror -- --dry_run=false --built_dir=/path/to/built
 //
 // --built_dir holds the built assets by name, made as the manifest's
 // "script" field says (none yet: every asset here is mirrored). Each
@@ -44,7 +44,7 @@ func run() error {
 	path := *manifestPath
 	if !filepath.IsAbs(path) {
 		if *root == "" {
-			return fmt.Errorf("no root; run it with `bazel run //tools:mirror` or pass --root")
+			return fmt.Errorf("no root; run it with `bazel run //tools/mirror` or pass --root")
 		}
 		path = filepath.Join(*root, path)
 	}

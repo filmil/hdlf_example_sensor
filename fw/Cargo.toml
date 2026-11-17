@@ -28,4 +28,9 @@ embedded-hal = "=1.0.0"
 embedded-hal-async = "=1.0.0"
 heapless = "=0.9.3"
 panic-halt = "=1.0.0"
+# The Cortex-M0 has no atomic compare-and-swap: static_cell and embassy
+# need portable-atomic's critical-section fallback, which cortex-m's
+# critical-section-single-core provides. Already locked, as a dependency
+# of embassy; this line only turns the feature on.
+portable-atomic = { version = "=1.15.0", features = ["critical-section"] }
 static_cell = "=2.1.1"

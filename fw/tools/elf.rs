@@ -2,19 +2,20 @@
 //! Reads the firmware's ELF (32-bit, little-endian, as rustc writes for
 //! thumbv6m-none-eabi): its sections and loadable segments, the raw image
 //! a DFU flash writes, and how much flash and RAM it uses. The standard
-//! library only, so it adds no crate.
+//! library only, so it adds no crate. Every read is bounds-checked: a
+//! malformed file is an error, never a panic.
 
-/// A section: its name, address, size, flags and type.
+/// A section: its name, address, size and flags.
 #[derive(Debug, Clone)]
 pub struct Section {
     pub name: String,
     pub addr: u32,
     pub size: u32,
     pub flags: u32,
-    pub kind: u32,
 }
 
-/// A loadable segment: where its bytes are in the file and in flash.
+/// A loadable segment: where its bytes are in the file, and the address
+/// they load at (the LMA: for .data, its initial values in flash).
 #[derive(Debug, Clone)]
 pub struct Segment {
     pub offset: u32,
@@ -31,22 +32,36 @@ pub struct Elf {
 
 const PT_LOAD: u32 = 1;
 const SHF_ALLOC: u32 = 2;
+const EHDR_SIZE: usize = 52;
+const PHDR_SIZE: usize = 32;
+const SHDR_SIZE: usize = 40;
+
+fn bytes(d: &[u8], o: usize, n: usize) -> Result<&[u8], String> {
+    o.checked_add(n)
+        .and_then(|end| d.get(o..end))
+        .ok_or_else(|| format!("the file ends before byte {} + {}", o, n))
+}
 
 fn u16_at(d: &[u8], o: usize) -> Result<u16, String> {
-    d.get(o..o + 2)
-        .map(|b| u16::from_le_bytes([b[0], b[1]]))
-        .ok_or_else(|| format!("the file ends before byte {}", o + 2))
+    let b = bytes(d, o, 2)?;
+    Ok(u16::from_le_bytes([b[0], b[1]]))
 }
 
 fn u32_at(d: &[u8], o: usize) -> Result<u32, String> {
-    d.get(o..o + 4)
-        .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-        .ok_or_else(|| format!("the file ends before byte {}", o + 4))
+    let b = bytes(d, o, 4)?;
+    Ok(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+}
+
+/// The offset of entry `i` of a table at `off` with entries of `size`.
+fn entry(off: usize, i: usize, size: usize) -> Result<usize, String> {
+    i.checked_mul(size)
+        .and_then(|x| x.checked_add(off))
+        .ok_or_else(|| "a header table past any file".to_string())
 }
 
 /// Parses a 32-bit little-endian ELF file.
 pub fn parse(d: &[u8]) -> Result<Elf, String> {
-    if d.len() < 52 || &d[0..4] != b"\x7fELF" {
+    if d.len() < EHDR_SIZE || &d[0..4] != b"\x7fELF" {
         return Err("not an ELF file".into());
     }
     if d[4] != 1 || d[5] != 1 {
@@ -59,10 +74,16 @@ pub fn parse(d: &[u8]) -> Result<Elf, String> {
     let shentsize = u16_at(d, 46)? as usize;
     let shnum = u16_at(d, 48)? as usize;
     let shstrndx = u16_at(d, 50)? as usize;
+    if phnum > 0 && phentsize < PHDR_SIZE {
+        return Err(format!("program headers of {} bytes, want at least {}", phentsize, PHDR_SIZE));
+    }
+    if shnum > 0 && shentsize < SHDR_SIZE {
+        return Err(format!("section headers of {} bytes, want at least {}", shentsize, SHDR_SIZE));
+    }
 
     let mut segments = Vec::new();
     for i in 0..phnum {
-        let o = phoff + i * phentsize;
+        let o = entry(phoff, i, phentsize)?;
         if u32_at(d, o)? == PT_LOAD {
             segments.push(Segment {
                 offset: u32_at(d, o + 4)?,
@@ -71,99 +92,133 @@ pub fn parse(d: &[u8]) -> Result<Elf, String> {
             });
         }
     }
-    // The section name table.
-    let str_hdr = shoff + shstrndx * shentsize;
-    let str_off = u32_at(d, str_hdr + 16)? as usize;
+
     let mut sections = Vec::new();
-    for i in 0..shnum {
-        let o = shoff + i * shentsize;
-        let name_off = str_off + u32_at(d, o)? as usize;
-        let end = d[name_off..]
-            .iter()
-            .position(|&b| b == 0)
-            .ok_or("a section name with no end")?;
-        sections.push(Section {
-            name: String::from_utf8_lossy(&d[name_off..name_off + end]).into_owned(),
-            kind: u32_at(d, o + 4)?,
-            flags: u32_at(d, o + 8)?,
-            addr: u32_at(d, o + 12)?,
-            size: u32_at(d, o + 20)?,
-        });
+    if shnum > 0 {
+        if shstrndx >= shnum {
+            return Err(format!("the name table is section {}, of {}", shstrndx, shnum));
+        }
+        let str_hdr = entry(shoff, shstrndx, shentsize)?;
+        let names = bytes(d, u32_at(d, str_hdr + 16)? as usize, u32_at(d, str_hdr + 20)? as usize)?;
+        for i in 0..shnum {
+            let o = entry(shoff, i, shentsize)?;
+            let at = u32_at(d, o)? as usize;
+            let rest = names.get(at..).ok_or_else(|| format!("section {}: its name is past the name table", i))?;
+            let end = rest
+                .iter()
+                .position(|&b| b == 0)
+                .ok_or_else(|| format!("section {}: its name has no end", i))?;
+            sections.push(Section {
+                name: String::from_utf8_lossy(&rest[..end]).into_owned(),
+                flags: u32_at(d, o + 8)?,
+                addr: u32_at(d, o + 12)?,
+                size: u32_at(d, o + 20)?,
+            });
+        }
     }
     Ok(Elf { sections, segments })
 }
 
-/// The raw image a flash writes: the loadable segments' bytes at their
-/// load addresses, from the lowest, gaps filled with 0xFF (erased flash).
-/// Returns the image and its start address.
-pub fn image(d: &[u8], elf: &Elf) -> Result<(Vec<u8>, u32), String> {
-    let mut segs: Vec<&Segment> = elf.segments.iter().filter(|s| s.filesz > 0).collect();
-    segs.sort_by_key(|s| s.paddr);
-    let first = segs.first().ok_or("no loadable segment with bytes")?;
-    let start = first.paddr;
-    let end = segs.iter().map(|s| s.paddr + s.filesz).max().unwrap();
-    let mut out = vec![0xFFu8; (end - start) as usize];
-    for s in segs {
-        let from = s.offset as usize;
-        let bytes = d
-            .get(from..from + s.filesz as usize)
-            .ok_or("a segment past the end of the file")?;
-        let at = (s.paddr - start) as usize;
-        out[at..at + bytes.len()].copy_from_slice(bytes);
-    }
-    Ok((out, start))
-}
-
-/// Flash and RAM use, in bytes.
-#[derive(Debug, PartialEq)]
-pub struct Usage {
-    pub flash: u32,
-    pub ram: u32,
-}
-
-/// The memory a chip has: flash from `flash_start`, RAM from `ram_start`.
+/// The memory a chip has, and how much RAM the stack needs at least.
 pub struct Memory {
     pub flash_start: u32,
     pub flash_size: u32,
     pub ram_start: u32,
     pub ram_size: u32,
+    pub stack_min: u32,
 }
 
-/// The STM32F042F6: 32 KB of flash, 6 KB of RAM (memory.x).
+/// The STM32F042F6: 32 KB of flash, 6 KB of RAM (memory.x). The stack
+/// grows down from the top of RAM, and gets at least 1 KB.
 pub const STM32F042F6: Memory = Memory {
     flash_start: 0x0800_0000,
     flash_size: 32 * 1024,
     ram_start: 0x2000_0000,
     ram_size: 6 * 1024,
+    stack_min: 1024,
 };
 
-/// What the firmware uses: flash is every loadable byte (the code, the
-/// constants and .data's initial values); RAM is every allocated section
-/// in RAM (.data, .bss and the like). The stack is what RAM is left.
-pub fn usage(elf: &Elf, mem: &Memory) -> Usage {
-    let flash = elf.segments.iter().map(|s| s.filesz).sum();
-    let ram = elf
-        .sections
-        .iter()
-        .filter(|s| s.flags & SHF_ALLOC != 0)
-        .filter(|s| s.addr >= mem.ram_start && s.addr < mem.ram_start + mem.ram_size)
-        .map(|s| s.size)
-        .sum();
-    Usage { flash, ram }
+fn end(start: u32, size: u32) -> Result<u64, String> {
+    Ok(start as u64 + size as u64)
 }
 
-/// Checks a usage against a memory: an error naming what is over.
+/// The raw image a flash writes: the loadable bytes at their load
+/// addresses, from the start of flash, gaps filled with 0xFF (erased
+/// flash). Every segment with bytes must load into flash, and none may
+/// overlap another. The image may be bigger than the flash: check() says.
+pub fn image(d: &[u8], elf: &Elf, mem: &Memory) -> Result<Vec<u8>, String> {
+    let mut segs: Vec<&Segment> = elf.segments.iter().filter(|s| s.filesz > 0).collect();
+    if segs.is_empty() {
+        return Err("no loadable segment with bytes".into());
+    }
+    segs.sort_by_key(|s| s.paddr);
+    let flash_end = end(mem.flash_start, mem.flash_size)?;
+    let mut last = mem.flash_start as u64;
+    for s in &segs {
+        let e = end(s.paddr, s.filesz)?;
+        if (s.paddr as u64) < mem.flash_start as u64 || s.paddr as u64 >= flash_end {
+            return Err(format!("a segment of {} bytes loads at {:#010x}, outside flash", s.filesz, s.paddr));
+        }
+        if (s.paddr as u64) < last {
+            return Err(format!("the segment at {:#010x} overlaps the one before it", s.paddr));
+        }
+        last = e;
+    }
+    let mut out = vec![0xFFu8; (last - mem.flash_start as u64) as usize];
+    for s in segs {
+        let src = bytes(d, s.offset as usize, s.filesz as usize).map_err(|e| format!("a segment's bytes: {}", e))?;
+        let at = (s.paddr - mem.flash_start) as usize;
+        out[at..at + src.len()].copy_from_slice(src);
+    }
+    Ok(out)
+}
+
+/// Flash and RAM use, in bytes.
+#[derive(Debug, PartialEq)]
+pub struct Usage {
+    pub flash: u64,
+    pub ram: u64,
+}
+
+/// What the firmware uses. Flash: the image's length, gaps included (it is
+/// what DFU writes). RAM: from the start of RAM to the end of the last
+/// allocated section there (.data, .bss and the like), padding included.
+/// An allocated section neither in flash nor in RAM is an error.
+pub fn usage(d: &[u8], elf: &Elf, mem: &Memory) -> Result<Usage, String> {
+    let flash = image(d, elf, mem)?.len() as u64;
+    let flash_end = end(mem.flash_start, mem.flash_size)?;
+    let mut ram = 0u64;
+    for s in elf.sections.iter().filter(|s| s.flags & SHF_ALLOC != 0 && s.size > 0) {
+        let e = end(s.addr, s.size)?;
+        let a = s.addr as u64;
+        if a >= mem.flash_start as u64 && a < flash_end {
+            continue; // counted in the image
+        }
+        // A section past the end of RAM still counts, so check() fails.
+        if a >= mem.ram_start as u64 && a < mem.ram_start as u64 + (1 << 28) {
+            ram = ram.max(e - mem.ram_start as u64);
+            continue;
+        }
+        return Err(format!("section {} at {:#010x} is neither in flash nor in RAM", s.name, s.addr));
+    }
+    Ok(Usage { flash, ram })
+}
+
+/// Checks a usage against a memory: an error naming what is over. RAM
+/// must leave the stack at least `stack_min` bytes.
 pub fn check(u: &Usage, mem: &Memory) -> Result<String, String> {
     let line = format!(
-        "flash {} of {} bytes ({:.1} %), RAM {} of {} bytes ({:.1} %)",
+        "flash {} of {} bytes ({:.1} %), RAM {} of {} bytes ({:.1} %), {} left for the stack (at least {})",
         u.flash,
         mem.flash_size,
         100.0 * u.flash as f64 / mem.flash_size as f64,
         u.ram,
         mem.ram_size,
-        100.0 * u.ram as f64 / mem.ram_size as f64
+        100.0 * u.ram as f64 / mem.ram_size as f64,
+        (mem.ram_size as u64).saturating_sub(u.ram),
+        mem.stack_min,
     );
-    if u.flash > mem.flash_size || u.ram > mem.ram_size {
+    if u.flash > mem.flash_size as u64 || u.ram + mem.stack_min as u64 > mem.ram_size as u64 {
         return Err(format!("over budget: {}", line));
     }
     Ok(line)

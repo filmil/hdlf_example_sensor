@@ -46,7 +46,7 @@
     {
       "tag": "mirror-crates-1",
       "title": "The firmware's crates, set 1",
-      "notes": "The registry crates of fw/Cargo.lock as of the toolchain PR, from https://static.crates.io/crates/, as downloaded; Cargo.lock pins each by sha256. bazel_downloader.cfg makes Bazel try this release before crates.io (https://github.com/filmil/hdlf_example_sensor/issues/14). Licences: every one MIT, Apache-2.0, or an OR of them with others; fw/crate_licences.txt lists each, and //fw:licence_test checks it. Crates added later go to mirror-crates-2 and on, since a release's assets are never replaced.",
+      "notes": "The registry crates of fw/Cargo.lock as of the toolchain PR, from https://static.crates.io/crates/, as downloaded; Cargo.lock pins each by sha256. bazel_downloader.cfg makes Bazel try this release before crates.io (https://github.com/filmil/hdlf_example_sensor/issues/14). Licences: fw/crate_licences.txt lists each crate's, from its own Cargo.toml; //fw:licence_test checks that each offers MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause or Zlib, except unicode-ident, a build-machine dependency of proc macros, which is (MIT OR Apache-2.0) AND Unicode-3.0. Crates added later go to mirror-crates-2 and on, since a release's assets are never replaced.",
       "assets": [
         {
           "name": "aho-corasick-1.1.5.crate",
