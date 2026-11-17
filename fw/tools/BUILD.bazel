@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Host tools for the firmware, std-only Rust: the ELF reader, and elf2bin,
+# which writes the raw flash image.
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
+
+package(default_visibility = ["//fw:__subpackages__"])
+
+rust_library(
+    name = "elf",
+    srcs = ["elf.rs"],
+)
+
+rust_test(
+    name = "elf_test",
+    size = "small",
+    srcs = ["elf_test.rs"],
+    deps = [":elf"],
+)
+
+rust_binary(
+    name = "elf2bin",
+    srcs = ["elf2bin.rs"],
+    deps = [":elf"],
+)

@@ -1,0 +1,714 @@
+{
+  "repo": "filmil/hdlf_example_sensor",
+  "releases": [
+    {
+      "tag": "mirror-rust-1.100.0",
+      "title": "Rust 1.100.0 for the firmware",
+      "notes": "Rust 1.100.0 (stable, 2026-11-09) from https://static.rust-lang.org/dist/, as downloaded: rustc, cargo, clippy, rustfmt and llvm-tools for x86_64-unknown-linux-gnu, and rust-std for x86_64-unknown-linux-gnu and thumbv6m-none-eabi (the STM32F042's Cortex-M0). MODULE.bazel's rust.toolchain pins each by sha256 and fetches it from here first (https://github.com/filmil/hdlf_example_sensor/issues/14). Licence: MIT OR Apache-2.0.",
+      "assets": [
+        {
+          "name": "cargo-1.100.0-x86_64-unknown-linux-gnu.tar.xz",
+          "sha256": "7e29ce07d7c6e92d1826870575ba27d57fff6cb3e754aa57d99099cb88fab35d",
+          "url": "https://static.rust-lang.org/dist/cargo-1.100.0-x86_64-unknown-linux-gnu.tar.xz"
+        },
+        {
+          "name": "clippy-1.100.0-x86_64-unknown-linux-gnu.tar.xz",
+          "sha256": "0d18df3bff6c852ef8243727fed075ecb33dbf93b8ab8c138c2f45e3f270102a",
+          "url": "https://static.rust-lang.org/dist/clippy-1.100.0-x86_64-unknown-linux-gnu.tar.xz"
+        },
+        {
+          "name": "llvm-tools-1.100.0-x86_64-unknown-linux-gnu.tar.xz",
+          "sha256": "2c84cada1aef73339b1a2d101a35cd78d71072c8f6a3921bf1abb852c3f42ad3",
+          "url": "https://static.rust-lang.org/dist/llvm-tools-1.100.0-x86_64-unknown-linux-gnu.tar.xz"
+        },
+        {
+          "name": "rust-std-1.100.0-thumbv6m-none-eabi.tar.xz",
+          "sha256": "46e69999d8ddf1ccaebe1aea0295c384ba78eb1d3892af187d23ee20c89b5513",
+          "url": "https://static.rust-lang.org/dist/rust-std-1.100.0-thumbv6m-none-eabi.tar.xz"
+        },
+        {
+          "name": "rust-std-1.100.0-x86_64-unknown-linux-gnu.tar.xz",
+          "sha256": "4591b6486594ded52ecd6135db95bf9355bbd3ca7a380888b141528bbcf9a5d4",
+          "url": "https://static.rust-lang.org/dist/rust-std-1.100.0-x86_64-unknown-linux-gnu.tar.xz"
+        },
+        {
+          "name": "rustc-1.100.0-x86_64-unknown-linux-gnu.tar.xz",
+          "sha256": "f1d0b1dec81dab6f523cd098507763487b0d4bd7fd2c87582f154128719be03b",
+          "url": "https://static.rust-lang.org/dist/rustc-1.100.0-x86_64-unknown-linux-gnu.tar.xz"
+        },
+        {
+          "name": "rustfmt-1.100.0-x86_64-unknown-linux-gnu.tar.xz",
+          "sha256": "4c9389e4722b16499e5d47d89837ec84a4ef755f105ed2a84c038156064e01ab",
+          "url": "https://static.rust-lang.org/dist/rustfmt-1.100.0-x86_64-unknown-linux-gnu.tar.xz"
+        }
+      ]
+    },
+    {
+      "tag": "mirror-crates-1",
+      "title": "The firmware's crates, set 1",
+      "notes": "The registry crates of fw/Cargo.lock as of the toolchain PR, from https://static.crates.io/crates/, as downloaded; Cargo.lock pins each by sha256. bazel_downloader.cfg makes Bazel try this release before crates.io (https://github.com/filmil/hdlf_example_sensor/issues/14). Licences: every one MIT, Apache-2.0, or an OR of them with others; fw/crate_licences.txt lists each, and //fw:licence_test checks it. Crates added later go to mirror-crates-2 and on, since a release's assets are never replaced.",
+      "assets": [
+        {
+          "name": "aho-corasick-1.1.5.crate",
+          "sha256": "c982642fa9e8606056828ee9a8505737230110bb1099153c79efe865c59d12ba",
+          "url": "https://static.crates.io/crates/aho-corasick/1.1.5/download"
+        },
+        {
+          "name": "aligned-0.4.3.crate",
+          "sha256": "ee4508988c62edf04abd8d92897fca0c2995d907ce1dfeaf369dac3716a40685",
+          "url": "https://static.crates.io/crates/aligned/0.4.3/download"
+        },
+        {
+          "name": "as-slice-0.2.1.crate",
+          "sha256": "516b6b4f0e40d50dcda9365d53964ec74560ad4284da2e7fc97122cd83174516",
+          "url": "https://static.crates.io/crates/as-slice/0.2.1/download"
+        },
+        {
+          "name": "autocfg-1.5.1.crate",
+          "sha256": "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53",
+          "url": "https://static.crates.io/crates/autocfg/1.5.1/download"
+        },
+        {
+          "name": "bare-metal-0.2.5.crate",
+          "sha256": "5deb64efa5bd81e31fcd1938615a6d98c82eafcbcd787162b6f63b91d6bac5b3",
+          "url": "https://static.crates.io/crates/bare-metal/0.2.5/download"
+        },
+        {
+          "name": "bit_field-0.10.4.crate",
+          "sha256": "cb2907cc03d08cdb1c6724ad0670ce67c4a71e1c45a6d7635224011714cfc4b1",
+          "url": "https://static.crates.io/crates/bit_field/0.10.4/download"
+        },
+        {
+          "name": "bitfield-0.13.2.crate",
+          "sha256": "46afbd2983a5d5a7bd740ccb198caf5b82f45c40c09c0eed36052d91cb92e719",
+          "url": "https://static.crates.io/crates/bitfield/0.13.2/download"
+        },
+        {
+          "name": "bitfield-0.19.5.crate",
+          "sha256": "b45721c9db4c7a20899d05efb7ad9235f50b256e980db30ffb229abf732934c3",
+          "url": "https://static.crates.io/crates/bitfield/0.19.5/download"
+        },
+        {
+          "name": "bitfield-macros-0.19.5.crate",
+          "sha256": "c0cb6f3d4773a2107b94cbeccaa5b5f0b35a88389b5d522d13d659f64317b22d",
+          "url": "https://static.crates.io/crates/bitfield-macros/0.19.5/download"
+        },
+        {
+          "name": "bitflags-2.13.2.crate",
+          "sha256": "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06",
+          "url": "https://static.crates.io/crates/bitflags/2.13.2/download"
+        },
+        {
+          "name": "block-device-driver-0.2.0.crate",
+          "sha256": "44c051592f59fe68053524b4c4935249b806f72c1f544cfb7abe4f57c3be258e",
+          "url": "https://static.crates.io/crates/block-device-driver/0.2.0/download"
+        },
+        {
+          "name": "byteorder-1.5.0.crate",
+          "sha256": "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b",
+          "url": "https://static.crates.io/crates/byteorder/1.5.0/download"
+        },
+        {
+          "name": "cc-1.11.2.crate",
+          "sha256": "33ef9e3e8154a45c7a95cff4c1299702106ad94062d7bb85fdc5d3a5afd91d45",
+          "url": "https://static.crates.io/crates/cc/1.11.2/download"
+        },
+        {
+          "name": "cfg-if-1.0.5.crate",
+          "sha256": "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600",
+          "url": "https://static.crates.io/crates/cfg-if/1.0.5/download"
+        },
+        {
+          "name": "cordyceps-0.3.5.crate",
+          "sha256": "5b9ab7e0ca1d179628fa0172b2b97203c7fa0cd81be2448bd446fb9559ca9261",
+          "url": "https://static.crates.io/crates/cordyceps/0.3.5/download"
+        },
+        {
+          "name": "cortex-m-0.7.10.crate",
+          "sha256": "408ca8c6d703a196b73219fdb68fd8914d4fda90c34e2bd6859d4842f761bd5f",
+          "url": "https://static.crates.io/crates/cortex-m/0.7.10/download"
+        },
+        {
+          "name": "cortex-m-macros-0.7.8.crate",
+          "sha256": "6d1922be58519ad40368fc4ca595a2cefa51a7abf947be3b0c90586dc7dbd0e2",
+          "url": "https://static.crates.io/crates/cortex-m-macros/0.7.8/download"
+        },
+        {
+          "name": "cortex-m-rt-0.7.7.crate",
+          "sha256": "f1f0f27b7ecbb9fad6702c8764d11d0b7245437de1575e34e39b2af95382f096",
+          "url": "https://static.crates.io/crates/cortex-m-rt/0.7.7/download"
+        },
+        {
+          "name": "cortex-m-rt-macros-0.7.7.crate",
+          "sha256": "05cf9e0f899304705b85fda7b178fc383f2529ec2479693248b600e530d2327a",
+          "url": "https://static.crates.io/crates/cortex-m-rt-macros/0.7.7/download"
+        },
+        {
+          "name": "critical-section-1.2.0.crate",
+          "sha256": "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b",
+          "url": "https://static.crates.io/crates/critical-section/1.2.0/download"
+        },
+        {
+          "name": "darling-0.20.11.crate",
+          "sha256": "fc7f46116c46ff9ab3eb1597a45688b6715c6e628b5c133e288e709a29bcb4ee",
+          "url": "https://static.crates.io/crates/darling/0.20.11/download"
+        },
+        {
+          "name": "darling_core-0.20.11.crate",
+          "sha256": "0d00b9596d185e565c2207a0b01f8bd1a135483d02d9b7b0a54b11da8d53412e",
+          "url": "https://static.crates.io/crates/darling_core/0.20.11/download"
+        },
+        {
+          "name": "darling_macro-0.20.11.crate",
+          "sha256": "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead",
+          "url": "https://static.crates.io/crates/darling_macro/0.20.11/download"
+        },
+        {
+          "name": "document-features-0.2.12.crate",
+          "sha256": "d4b8a88685455ed29a21542a33abd9cb6510b6b129abadabdcef0f4c55bc8f61",
+          "url": "https://static.crates.io/crates/document-features/0.2.12/download"
+        },
+        {
+          "name": "embassy-embedded-hal-0.6.0.crate",
+          "sha256": "b0641612053b2f34fc250bb63f6630ae75de46e02ade7f457268447081d709ce",
+          "url": "https://static.crates.io/crates/embassy-embedded-hal/0.6.0/download"
+        },
+        {
+          "name": "embassy-executor-0.10.0.crate",
+          "sha256": "5d0d3b15c9d7dc4fec1d8cb77112472fb008b3b28c51ad23838d83587a6d2f1e",
+          "url": "https://static.crates.io/crates/embassy-executor/0.10.0/download"
+        },
+        {
+          "name": "embassy-executor-macros-0.8.0.crate",
+          "sha256": "d11a246f53de5f97a387f40ac24726817cd0b6f833e7603baac784f29d6ff276",
+          "url": "https://static.crates.io/crates/embassy-executor-macros/0.8.0/download"
+        },
+        {
+          "name": "embassy-executor-timer-queue-0.1.0.crate",
+          "sha256": "2fc328bf943af66b80b98755db9106bf7e7471b0cf47dc8559cd9a6be504cc9c",
+          "url": "https://static.crates.io/crates/embassy-executor-timer-queue/0.1.0/download"
+        },
+        {
+          "name": "embassy-futures-0.1.2.crate",
+          "sha256": "dc2d050bdc5c21e0862a89256ed8029ae6c290a93aecefc73084b3002cdebb01",
+          "url": "https://static.crates.io/crates/embassy-futures/0.1.2/download"
+        },
+        {
+          "name": "embassy-hal-internal-0.4.0.crate",
+          "sha256": "7f10ce10a4dfdf6402d8e9bd63128986b96a736b1a0a6680547ed2ac55d55dba",
+          "url": "https://static.crates.io/crates/embassy-hal-internal/0.4.0/download"
+        },
+        {
+          "name": "embassy-hal-internal-0.5.0.crate",
+          "sha256": "568659fc53866d3d85c60fa33723fb751aa69e71507634fc2c19e7649432fb75",
+          "url": "https://static.crates.io/crates/embassy-hal-internal/0.5.0/download"
+        },
+        {
+          "name": "embassy-net-driver-0.2.0.crate",
+          "sha256": "524eb3c489760508f71360112bca70f6e53173e6fe48fc5f0efd0f5ab217751d",
+          "url": "https://static.crates.io/crates/embassy-net-driver/0.2.0/download"
+        },
+        {
+          "name": "embassy-net-driver-channel-0.4.0.crate",
+          "sha256": "a07d2eb9f05a6fc876500949856ea1be40773d866d8cb99384f72d0ae4568c16",
+          "url": "https://static.crates.io/crates/embassy-net-driver-channel/0.4.0/download"
+        },
+        {
+          "name": "embassy-stm32-0.6.0.crate",
+          "sha256": "486c0622deb5a519fc4d2cb8e3ef324f7568fcdfff201ff8fcab46557d663ceb",
+          "url": "https://static.crates.io/crates/embassy-stm32/0.6.0/download"
+        },
+        {
+          "name": "embassy-sync-0.8.0.crate",
+          "sha256": "7bbd85cf5a5ae56bdf26f618364af642d1d0a4e245cdd75cd9aabda382f65a81",
+          "url": "https://static.crates.io/crates/embassy-sync/0.8.0/download"
+        },
+        {
+          "name": "embassy-time-0.5.1.crate",
+          "sha256": "592b0c143ec626e821d4d90da51a2bd91d559d6c442b7c74a47d368c9e23d97a",
+          "url": "https://static.crates.io/crates/embassy-time/0.5.1/download"
+        },
+        {
+          "name": "embassy-time-driver-0.2.2.crate",
+          "sha256": "6ee71af1b3a0deaa53eaf2d39252f83504c853646e472400b763060389b9fcc9",
+          "url": "https://static.crates.io/crates/embassy-time-driver/0.2.2/download"
+        },
+        {
+          "name": "embassy-time-queue-utils-0.3.2.crate",
+          "sha256": "168297bf80aaf114b3c9ad589bf38b01b3009b9af7f97cd18086c5bbf96f5693",
+          "url": "https://static.crates.io/crates/embassy-time-queue-utils/0.3.2/download"
+        },
+        {
+          "name": "embassy-usb-0.6.0.crate",
+          "sha256": "a25746d8b152b72fbf2a217f489a083dbbe243f281f09184a1f2cfbe9bbb245f",
+          "url": "https://static.crates.io/crates/embassy-usb/0.6.0/download"
+        },
+        {
+          "name": "embassy-usb-driver-0.2.2.crate",
+          "sha256": "fa675c5f4349b6aa0fcffc4bf9b241f18cd11b97c1f8323273fb9a5449937fbd",
+          "url": "https://static.crates.io/crates/embassy-usb-driver/0.2.2/download"
+        },
+        {
+          "name": "embassy-usb-synopsys-otg-0.3.3.crate",
+          "sha256": "fb205e26d59e483e8c48f91f637ec217ec7e2cfb0b61d50482301b991b4ff431",
+          "url": "https://static.crates.io/crates/embassy-usb-synopsys-otg/0.3.3/download"
+        },
+        {
+          "name": "embedded-can-0.4.1.crate",
+          "sha256": "e9d2e857f87ac832df68fa498d18ddc679175cf3d2e4aa893988e5601baf9438",
+          "url": "https://static.crates.io/crates/embedded-can/0.4.1/download"
+        },
+        {
+          "name": "embedded-hal-0.2.7.crate",
+          "sha256": "35949884794ad573cf46071e41c9b60efb0cb311e3ca01f7af807af1debc66ff",
+          "url": "https://static.crates.io/crates/embedded-hal/0.2.7/download"
+        },
+        {
+          "name": "embedded-hal-1.0.0.crate",
+          "sha256": "361a90feb7004eca4019fb28352a9465666b24f840f5c3cddf0ff13920590b89",
+          "url": "https://static.crates.io/crates/embedded-hal/1.0.0/download"
+        },
+        {
+          "name": "embedded-hal-async-1.0.0.crate",
+          "sha256": "0c4c685bbef7fe13c3c6dd4da26841ed3980ef33e841cddfa15ce8a8fb3f1884",
+          "url": "https://static.crates.io/crates/embedded-hal-async/1.0.0/download"
+        },
+        {
+          "name": "embedded-hal-nb-1.0.0.crate",
+          "sha256": "fba4268c14288c828995299e59b12babdbe170f6c6d73731af1b4648142e8605",
+          "url": "https://static.crates.io/crates/embedded-hal-nb/1.0.0/download"
+        },
+        {
+          "name": "embedded-io-0.6.1.crate",
+          "sha256": "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d",
+          "url": "https://static.crates.io/crates/embedded-io/0.6.1/download"
+        },
+        {
+          "name": "embedded-io-0.7.1.crate",
+          "sha256": "9eb1aa714776b75c7e67e1da744b81a129b3ff919c8712b5e1b32252c1f07cc7",
+          "url": "https://static.crates.io/crates/embedded-io/0.7.1/download"
+        },
+        {
+          "name": "embedded-io-async-0.6.1.crate",
+          "sha256": "3ff09972d4073aa8c299395be75161d582e7629cd663171d62af73c8d50dba3f",
+          "url": "https://static.crates.io/crates/embedded-io-async/0.6.1/download"
+        },
+        {
+          "name": "embedded-io-async-0.7.0.crate",
+          "sha256": "2564b9f813c544241430e147d8bc454815ef9ac998878d30cc3055449f7fd4c0",
+          "url": "https://static.crates.io/crates/embedded-io-async/0.7.0/download"
+        },
+        {
+          "name": "embedded-storage-0.3.2.crate",
+          "sha256": "c815b3ed4213d85d6cfd274b871f430c0681084e28dfd4a537877f47f844ec83",
+          "url": "https://static.crates.io/crates/embedded-storage/0.3.2/download"
+        },
+        {
+          "name": "embedded-storage-async-0.4.2.crate",
+          "sha256": "69aa7787b8ba0cf4e626c95839f811d853b75e24a0f7312a1eef324fedc13b21",
+          "url": "https://static.crates.io/crates/embedded-storage-async/0.4.2/download"
+        },
+        {
+          "name": "encode_unicode-0.3.6.crate",
+          "sha256": "a357d28ed41a50f9c765dbfe56cbc04a64e53e5fc58ba79fbc34c10ef3df831f",
+          "url": "https://static.crates.io/crates/encode_unicode/0.3.6/download"
+        },
+        {
+          "name": "find-msvc-tools-0.1.15.crate",
+          "sha256": "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48",
+          "url": "https://static.crates.io/crates/find-msvc-tools/0.1.15/download"
+        },
+        {
+          "name": "fnv-1.0.7.crate",
+          "sha256": "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1",
+          "url": "https://static.crates.io/crates/fnv/1.0.7/download"
+        },
+        {
+          "name": "futures-core-0.3.34.crate",
+          "sha256": "92d699e522242e69e3003b94ecc1f960f3a5e015aa7c5d7486e65ad01dd94f5e",
+          "url": "https://static.crates.io/crates/futures-core/0.3.34/download"
+        },
+        {
+          "name": "futures-sink-0.3.34.crate",
+          "sha256": "1944426bf7d03f1d14f708785e4b33efd750b36d48a157b836b3efc15ede8e1d",
+          "url": "https://static.crates.io/crates/futures-sink/0.3.34/download"
+        },
+        {
+          "name": "futures-task-0.3.34.crate",
+          "sha256": "cd417de3d1d015fc3bfd2b1ea46dfc7bab72ef86f1cc7cc9c78e728b34a6d1fd",
+          "url": "https://static.crates.io/crates/futures-task/0.3.34/download"
+        },
+        {
+          "name": "futures-util-0.3.34.crate",
+          "sha256": "0d50a92467f8ba5dd6e3ee5d4bd04d73ab2e4e1c44474a0674821dfce14b79bc",
+          "url": "https://static.crates.io/crates/futures-util/0.3.34/download"
+        },
+        {
+          "name": "generator-0.8.12.crate",
+          "sha256": "ea6c6a73cd1aa4f4f00c02b109fa55d3a9d6ecc2fc4f53177b74ed6ee23b0c53",
+          "url": "https://static.crates.io/crates/generator/0.8.12/download"
+        },
+        {
+          "name": "hash32-0.3.1.crate",
+          "sha256": "47d60b12902ba28e2730cd37e95b8c9223af2808df9e902d4df49588d1470606",
+          "url": "https://static.crates.io/crates/hash32/0.3.1/download"
+        },
+        {
+          "name": "heapless-0.8.0.crate",
+          "sha256": "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad",
+          "url": "https://static.crates.io/crates/heapless/0.8.0/download"
+        },
+        {
+          "name": "heapless-0.9.3.crate",
+          "sha256": "25ba4bd83f9415b58b4ed8dc5714c76e626a105be4646c02630ad730ad3b5aa4",
+          "url": "https://static.crates.io/crates/heapless/0.9.3/download"
+        },
+        {
+          "name": "ident_case-1.0.1.crate",
+          "sha256": "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39",
+          "url": "https://static.crates.io/crates/ident_case/1.0.1/download"
+        },
+        {
+          "name": "lazy_static-1.5.1.crate",
+          "sha256": "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb",
+          "url": "https://static.crates.io/crates/lazy_static/1.5.1/download"
+        },
+        {
+          "name": "libc-0.2.191.crate",
+          "sha256": "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a",
+          "url": "https://static.crates.io/crates/libc/0.2.191/download"
+        },
+        {
+          "name": "litrs-1.0.1.crate",
+          "sha256": "4744e383959f0db86ede514b809b1c53251889093803c05267acc7d4e7030d70",
+          "url": "https://static.crates.io/crates/litrs/1.0.1/download"
+        },
+        {
+          "name": "log-0.4.35.crate",
+          "sha256": "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c",
+          "url": "https://static.crates.io/crates/log/0.4.35/download"
+        },
+        {
+          "name": "loom-0.7.3.crate",
+          "sha256": "f1611ddbf89dc6ae42cfbd51fc207836140130257646eab8d6d2fb16577db2d2",
+          "url": "https://static.crates.io/crates/loom/0.7.3/download"
+        },
+        {
+          "name": "matchers-0.2.0.crate",
+          "sha256": "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9",
+          "url": "https://static.crates.io/crates/matchers/0.2.0/download"
+        },
+        {
+          "name": "memchr-2.8.3.crate",
+          "sha256": "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98",
+          "url": "https://static.crates.io/crates/memchr/2.8.3/download"
+        },
+        {
+          "name": "nb-0.1.3.crate",
+          "sha256": "801d31da0513b6ec5214e9bf433a77966320625a37860f910be265be6e18d06f",
+          "url": "https://static.crates.io/crates/nb/0.1.3/download"
+        },
+        {
+          "name": "nb-1.1.0.crate",
+          "sha256": "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d",
+          "url": "https://static.crates.io/crates/nb/1.1.0/download"
+        },
+        {
+          "name": "nu-ansi-term-0.50.3.crate",
+          "sha256": "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5",
+          "url": "https://static.crates.io/crates/nu-ansi-term/0.50.3/download"
+        },
+        {
+          "name": "num-traits-0.2.19.crate",
+          "sha256": "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841",
+          "url": "https://static.crates.io/crates/num-traits/0.2.19/download"
+        },
+        {
+          "name": "once_cell-1.21.4.crate",
+          "sha256": "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50",
+          "url": "https://static.crates.io/crates/once_cell/1.21.4/download"
+        },
+        {
+          "name": "panic-halt-1.0.0.crate",
+          "sha256": "a513e167849a384b7f9b746e517604398518590a9142f4846a32e3c2a4de7b11",
+          "url": "https://static.crates.io/crates/panic-halt/1.0.0/download"
+        },
+        {
+          "name": "pin-project-lite-0.2.17.crate",
+          "sha256": "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd",
+          "url": "https://static.crates.io/crates/pin-project-lite/0.2.17/download"
+        },
+        {
+          "name": "portable-atomic-1.15.0.crate",
+          "sha256": "05c8b63e8d9609db387f0324918f81d68fe27748f084ef092fb35954d0539a85",
+          "url": "https://static.crates.io/crates/portable-atomic/1.15.0/download"
+        },
+        {
+          "name": "proc-macro2-1.0.107.crate",
+          "sha256": "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9",
+          "url": "https://static.crates.io/crates/proc-macro2/1.0.107/download"
+        },
+        {
+          "name": "quote-1.0.47.crate",
+          "sha256": "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001",
+          "url": "https://static.crates.io/crates/quote/1.0.47/download"
+        },
+        {
+          "name": "rand_core-0.6.4.crate",
+          "sha256": "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c",
+          "url": "https://static.crates.io/crates/rand_core/0.6.4/download"
+        },
+        {
+          "name": "rand_core-0.9.5.crate",
+          "sha256": "76afc826de14238e6e8c374ddcc1fa19e374fd8dd986b0d2af0d02377261d83c",
+          "url": "https://static.crates.io/crates/rand_core/0.9.5/download"
+        },
+        {
+          "name": "regex-1.13.1.crate",
+          "sha256": "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d",
+          "url": "https://static.crates.io/crates/regex/1.13.1/download"
+        },
+        {
+          "name": "regex-automata-0.4.18.crate",
+          "sha256": "ad8553b9b26413251cbf30e620595c7a41b3887f03da04579c0e6b0d6a06b4b2",
+          "url": "https://static.crates.io/crates/regex-automata/0.4.18/download"
+        },
+        {
+          "name": "regex-syntax-0.8.11.crate",
+          "sha256": "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4",
+          "url": "https://static.crates.io/crates/regex-syntax/0.8.11/download"
+        },
+        {
+          "name": "rustc_version-0.2.3.crate",
+          "sha256": "138e3e0acb6c9fb258b19b67cb8abd63c00679d2851805ea151465464fe9030a",
+          "url": "https://static.crates.io/crates/rustc_version/0.2.3/download"
+        },
+        {
+          "name": "rustversion-1.0.23.crate",
+          "sha256": "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f",
+          "url": "https://static.crates.io/crates/rustversion/1.0.23/download"
+        },
+        {
+          "name": "scoped-tls-1.0.1.crate",
+          "sha256": "e1cf6437eb19a8f4a6cc0f7dca544973b0b78843adbfeb3683d1a94a0024a294",
+          "url": "https://static.crates.io/crates/scoped-tls/1.0.1/download"
+        },
+        {
+          "name": "sdio-host-0.9.0.crate",
+          "sha256": "b328e2cb950eeccd55b7f55c3a963691455dcd044cfb5354f0c5e68d2c2d6ee2",
+          "url": "https://static.crates.io/crates/sdio-host/0.9.0/download"
+        },
+        {
+          "name": "semver-0.9.0.crate",
+          "sha256": "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403",
+          "url": "https://static.crates.io/crates/semver/0.9.0/download"
+        },
+        {
+          "name": "semver-parser-0.7.0.crate",
+          "sha256": "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3",
+          "url": "https://static.crates.io/crates/semver-parser/0.7.0/download"
+        },
+        {
+          "name": "serde-1.0.229.crate",
+          "sha256": "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba",
+          "url": "https://static.crates.io/crates/serde/1.0.229/download"
+        },
+        {
+          "name": "serde_core-1.0.229.crate",
+          "sha256": "67dca2c9c51e58a4791a4b1ed58308b39c64224d349a935ab5039aa360942a48",
+          "url": "https://static.crates.io/crates/serde_core/1.0.229/download"
+        },
+        {
+          "name": "serde_derive-1.0.229.crate",
+          "sha256": "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348",
+          "url": "https://static.crates.io/crates/serde_derive/1.0.229/download"
+        },
+        {
+          "name": "sharded-slab-0.1.7.crate",
+          "sha256": "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6",
+          "url": "https://static.crates.io/crates/sharded-slab/0.1.7/download"
+        },
+        {
+          "name": "shlex-2.0.1.crate",
+          "sha256": "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba",
+          "url": "https://static.crates.io/crates/shlex/2.0.1/download"
+        },
+        {
+          "name": "smallvec-1.16.5.crate",
+          "sha256": "149309498a5f7334b12ddae0cad8aba81ce785fe91755068867e017cf98fee46",
+          "url": "https://static.crates.io/crates/smallvec/1.16.5/download"
+        },
+        {
+          "name": "ssmarshal-1.0.0.crate",
+          "sha256": "f3e6ad23b128192ed337dfa4f1b8099ced0c2bf30d61e551b65fda5916dbb850",
+          "url": "https://static.crates.io/crates/ssmarshal/1.0.0/download"
+        },
+        {
+          "name": "stable_deref_trait-1.2.1.crate",
+          "sha256": "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596",
+          "url": "https://static.crates.io/crates/stable_deref_trait/1.2.1/download"
+        },
+        {
+          "name": "static_assertions-1.1.0.crate",
+          "sha256": "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f",
+          "url": "https://static.crates.io/crates/static_assertions/1.1.0/download"
+        },
+        {
+          "name": "static_cell-2.1.1.crate",
+          "sha256": "0530892bb4fa575ee0da4b86f86c667132a94b74bb72160f58ee5a4afec74c23",
+          "url": "https://static.crates.io/crates/static_cell/2.1.1/download"
+        },
+        {
+          "name": "stm32-fmc-0.4.0.crate",
+          "sha256": "72692594faa67f052e5e06dd34460951c21e83bc55de4feb8d2666e2f15480a2",
+          "url": "https://static.crates.io/crates/stm32-fmc/0.4.0/download"
+        },
+        {
+          "name": "stm32-metapac-21.0.0.crate",
+          "sha256": "e74b78632cea498cfb28386a29f8bfae7476d6570a78733eb5fecbee66c2f4ce",
+          "url": "https://static.crates.io/crates/stm32-metapac/21.0.0/download"
+        },
+        {
+          "name": "strsim-0.11.1.crate",
+          "sha256": "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f",
+          "url": "https://static.crates.io/crates/strsim/0.11.1/download"
+        },
+        {
+          "name": "syn-1.0.109.crate",
+          "sha256": "72b64191b275b66ffe2469e8af2c1cfe3bafa67b529ead792a6d0160888b4237",
+          "url": "https://static.crates.io/crates/syn/1.0.109/download"
+        },
+        {
+          "name": "syn-2.0.119.crate",
+          "sha256": "872831b642d1a07999a962a351ed35b955ea2cfc8f3862091e2a240a84f17297",
+          "url": "https://static.crates.io/crates/syn/2.0.119/download"
+        },
+        {
+          "name": "syn-3.0.10.crate",
+          "sha256": "4ae9ccbea3a7b0b09443036490c8f34a8b1b760fd345e5c0dae0aac718faea79",
+          "url": "https://static.crates.io/crates/syn/3.0.10/download"
+        },
+        {
+          "name": "thread_local-1.1.10.crate",
+          "sha256": "1ad99c4c6d32803332c548b1af0540b357b3f5fc0be8f6c6bfe8b2e6ae784070",
+          "url": "https://static.crates.io/crates/thread_local/1.1.10/download"
+        },
+        {
+          "name": "tracing-0.1.44.crate",
+          "sha256": "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100",
+          "url": "https://static.crates.io/crates/tracing/0.1.44/download"
+        },
+        {
+          "name": "tracing-attributes-0.1.31.crate",
+          "sha256": "7490cfa5ec963746568740651ac6781f701c9c5ea257c58e057f3ba8cf69e8da",
+          "url": "https://static.crates.io/crates/tracing-attributes/0.1.31/download"
+        },
+        {
+          "name": "tracing-core-0.1.36.crate",
+          "sha256": "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a",
+          "url": "https://static.crates.io/crates/tracing-core/0.1.36/download"
+        },
+        {
+          "name": "tracing-log-0.2.0.crate",
+          "sha256": "ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3",
+          "url": "https://static.crates.io/crates/tracing-log/0.2.0/download"
+        },
+        {
+          "name": "tracing-subscriber-0.3.23.crate",
+          "sha256": "cb7f578e5945fb242538965c2d0b04418d38ec25c79d160cd279bf0731c8d319",
+          "url": "https://static.crates.io/crates/tracing-subscriber/0.3.23/download"
+        },
+        {
+          "name": "trait-set-0.3.0.crate",
+          "sha256": "b79e2e9c9ab44c6d7c20d5976961b47e8f49ac199154daa514b77cd1ab536625",
+          "url": "https://static.crates.io/crates/trait-set/0.3.0/download"
+        },
+        {
+          "name": "unicode-ident-1.0.27.crate",
+          "sha256": "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563",
+          "url": "https://static.crates.io/crates/unicode-ident/1.0.27/download"
+        },
+        {
+          "name": "usb-device-0.3.2.crate",
+          "sha256": "98816b1accafbb09085168b90f27e93d790b4bfa19d883466b5e53315b5f06a6",
+          "url": "https://static.crates.io/crates/usb-device/0.3.2/download"
+        },
+        {
+          "name": "usbd-hid-0.10.2.crate",
+          "sha256": "9c64029483e469c727a1808fa1b786be849d1ecaae923c11258025571b05df7c",
+          "url": "https://static.crates.io/crates/usbd-hid/0.10.2/download"
+        },
+        {
+          "name": "usbd-hid-descriptors-0.10.2.crate",
+          "sha256": "dd466c5ed272b360a4866bac7d999bb68f061cad12abe6af381fc46e012a17c9",
+          "url": "https://static.crates.io/crates/usbd-hid-descriptors/0.10.2/download"
+        },
+        {
+          "name": "usbd-hid-macros-0.10.2.crate",
+          "sha256": "53d261df1b7cc908e93e3f66aeb65bd2fc7fcfb3751196478e5266d251984eea",
+          "url": "https://static.crates.io/crates/usbd-hid-macros/0.10.2/download"
+        },
+        {
+          "name": "valuable-0.1.1.crate",
+          "sha256": "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65",
+          "url": "https://static.crates.io/crates/valuable/0.1.1/download"
+        },
+        {
+          "name": "vcell-0.1.3.crate",
+          "sha256": "77439c1b53d2303b20d9459b1ade71a83c716e3f9c34f3228c00e6f185d6c002",
+          "url": "https://static.crates.io/crates/vcell/0.1.3/download"
+        },
+        {
+          "name": "void-1.0.2.crate",
+          "sha256": "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d",
+          "url": "https://static.crates.io/crates/void/1.0.2/download"
+        },
+        {
+          "name": "volatile-register-0.2.2.crate",
+          "sha256": "de437e2a6208b014ab52972a27e59b33fa2920d3e00fe05026167a1c509d19cc",
+          "url": "https://static.crates.io/crates/volatile-register/0.2.2/download"
+        },
+        {
+          "name": "windows-core-0.100.0.crate",
+          "sha256": "803590c6856f51d15fa2e9fabe4f4703122c8737f72ef2741b4ac09d4c2192f5",
+          "url": "https://static.crates.io/crates/windows-core/0.100.0/download"
+        },
+        {
+          "name": "windows-implement-0.100.0.crate",
+          "sha256": "1bc1bc82e5a1b1a4d7255861b07881a0407b552f50a4d8543c0c7276fa96f6e8",
+          "url": "https://static.crates.io/crates/windows-implement/0.100.0/download"
+        },
+        {
+          "name": "windows-interface-0.100.0.crate",
+          "sha256": "b3f7005c3b757b9b82c2f40c0e71094ff1080adddaf3e8b6ce99b545d3c48796",
+          "url": "https://static.crates.io/crates/windows-interface/0.100.0/download"
+        },
+        {
+          "name": "windows-link-0.100.0.crate",
+          "sha256": "9b39de7c7fe78858b0144c50c3fc000bab3be17d5e9b85b1053871693c7f7415",
+          "url": "https://static.crates.io/crates/windows-link/0.100.0/download"
+        },
+        {
+          "name": "windows-link-0.2.1.crate",
+          "sha256": "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5",
+          "url": "https://static.crates.io/crates/windows-link/0.2.1/download"
+        },
+        {
+          "name": "windows-result-0.100.0.crate",
+          "sha256": "44873a1ef61c85d5e2991db91fe656cfcf0731097e00dff1ac860f1cb3b752a0",
+          "url": "https://static.crates.io/crates/windows-result/0.100.0/download"
+        },
+        {
+          "name": "windows-strings-0.100.0.crate",
+          "sha256": "6a70b590c684f1d2854f74999896f7c0558f1bdde62f599088599e20ea1d2f60",
+          "url": "https://static.crates.io/crates/windows-strings/0.100.0/download"
+        },
+        {
+          "name": "windows-sys-0.61.2.crate",
+          "sha256": "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc",
+          "url": "https://static.crates.io/crates/windows-sys/0.61.2/download"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# The sensor's firmware (issue #14), in Rust for the STM32F042F6's Cortex-M0
+# (thumbv6m-none-eabi). For now the toolchain's proof: a binary that starts
+# and sleeps, its raw flash image, and the checks every later firmware PR
+# keeps: the flash and RAM budget, determinism, and the crates' licences.
+load("@hdlf_rules_netlist//netlist:defs.bzl", "determinism_test")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "Cargo.lock",
+    "stm32-metapac-device-x.patch",
+])
+
+platform(
+    name = "stm32f042",
+    constraint_values = [
+        "@platforms//cpu:armv6-m",
+        "@platforms//os:none",
+    ],
+)
+
+# The firmware ELF, for the STM32F042F6 whatever the build's platform.
+rust_binary(
+    name = "fw",
+    srcs = ["src/main.rs"],
+    compile_data = ["memory.x"],
+    platform = ":stm32f042",
+    rustc_flags = [
+        "-Copt-level=z",
+        "-Ccodegen-units=1",
+        "-Cpanic=abort",
+        "-Clink-arg=-Tlink.x",
+        "-Clink-arg=-L" + package_name(),
+    ],
+    deps = [
+        "@crates//:cortex-m",
+        "@crates//:cortex-m-rt",
+        "@crates//:embassy-stm32",
+        "@crates//:panic-halt",
+    ],
+)
+
+# The raw flash image, for DFU: fw.bin.
+genrule(
+    name = "fw_bin",
+    srcs = [":fw"],
+    outs = ["fw.bin"],
+    cmd = "$(execpath //fw/tools:elf2bin) $< $@",
+    tools = ["//fw/tools:elf2bin"],
+)
+
+# The ELF fits 32 KB of flash and 6 KB of RAM; a 1 KB chip fails.
+rust_test(
+    name = "budget_test",
+    size = "small",
+    srcs = ["test/budget_test.rs"],
+    data = [":fw"],
+    env = {"FW_ELF": "$(rootpath :fw)"},
+    deps = ["//fw/tools:elf"],
+)
+
+# Every crate in Cargo.lock has an allowed licence.
+rust_test(
+    name = "licence_test",
+    size = "small",
+    srcs = ["test/licence_test.rs"],
+    data = [
+        "Cargo.lock",
+        "crate_licences.txt",
+    ],
+    env = {
+        "CARGO_LOCK": "$(rootpath Cargo.lock)",
+        "LICENCES": "$(rootpath crate_licences.txt)",
+    },
+)
+
+# The ELF and the image, the same from two configurations.
+determinism_test(
+    name = "fw_determinism_test",
+    size = "small",
+    target = ":fw_outputs",
+)
+
+filegroup(
+    name = "fw_outputs",
+    srcs = [
+        ":fw",
+        ":fw_bin",
+    ],
+)

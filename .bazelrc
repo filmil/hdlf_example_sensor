@@ -22,3 +22,12 @@ common --@rules_python//python/config_settings:bootstrap_impl=script
 
 # Add your local user settings to file `user.bazelrc`.
 try-import %workspace%/user.bazelrc
+
+# The firmware's crates come from this repository's mirror first
+# (bazel_downloader.cfg, tools/mirror).
+common --downloader_config=bazel_downloader.cfg
+
+# The firmware links with fat LTO (issue #14): rules_rust then builds every
+# crate with the bitcode LTO needs. rules_rust remaps the build's paths to
+# "." by itself, so they do not reach the ELF.
+build --@rules_rust//rust/settings:lto=fat

@@ -17,6 +17,9 @@ real:
 | [hdlf_rules_brep](https://github.com/filmil/bazel_rules_brep) | the enclosure: its tray and its front panel |
 | [hdlf_rules_cam](https://github.com/filmil/bazel_rules_cam) | the front panel's G-code |
 
+The firmware is Rust, built by [rules_rust](https://github.com/bazelbuild/rules_rust);
+see [fw/README.md](fw/README.md).
+
 ## Building
 
 Linux x86_64. Nothing but Bazel (bazelisk) needs to be installed:
@@ -27,6 +30,9 @@ bazel test //...
 
 The modules come from the filmil registry, which `.bazelrc` names before
 the Bazel Central Registry.
+
+The firmware's Rust toolchain and crates come from this repository's
+mirror releases first, then from upstream ([fw/README.md](fw/README.md)).
 
 ## Releasing
 
