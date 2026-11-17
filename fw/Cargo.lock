@@ -630,6 +630,7 @@ dependencies = [
  "panic-halt",
  "portable-atomic",
  "static_cell",
+ "stm32-metapac",
 ]
 
 [[package]]

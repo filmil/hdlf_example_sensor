@@ -19,6 +19,8 @@ use embassy_usb as _;
 use embedded_hal as _;
 use embedded_hal_async as _;
 use heapless as _;
+// The pin map from the board's netlist (//fw:pins); step 4 uses it.
+use pins as _;
 use static_cell as _;
 
 #[entry]

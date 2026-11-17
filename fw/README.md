@@ -44,6 +44,7 @@ directory, which the link step does see.
 | `:fw_determinism_test` | The ELF and `fw.bin` are the same bytes from two configurations. |
 | `:licence_test` | Every crate of `Cargo.lock` is in `crate_licences.txt`, once, at its version, and its SPDX expression offers MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause or Zlib. The one exception is unicode-ident: it is `(MIT OR Apache-2.0) AND Unicode-3.0`, and accepted because it only runs on the build machine, inside proc macros. |
 | `tools:elf_test` | The ELF reader, on small ELF files the test writes byte by byte, malformed ones included. |
+| `:pinmap_test`, `:pins_test` | The pin map: see below. |
 
 `crate_licences.txt` holds the `license` of each crate's own
 `Cargo.toml`. A change to `Cargo.lock` must update it, or the test fails.
@@ -53,6 +54,37 @@ shows each one builds for the Cortex-M0. The Cortex-M0 has no atomic
 compare-and-swap, so `Cargo.toml` turns on portable-atomic's
 `critical-section` feature, which cortex-m's single-core critical
 section serves.
+
+## The pin map
+
+`//fw:pins` is a `no_std` crate with one constant per MCU net the
+firmware uses: its port and pin number and, for a peripheral signal, its
+alternate function. `//fw:pins_rs` generates it at build time from the
+board's netlist (`//elec:netlist`), so the firmware cannot drift from the
+board. `pins.json` lists the nets and what each pin must do:
+
+| Net | Must be |
+|---|---|
+| `LED`, `DRDY` | a port pin |
+| `I2C_SDA`, `I2C_SCL` | I2C1's SDA and SCL |
+| `USB_DP`, `USB_DM` | USB's DP and DM |
+| `BOOT0` | PB8: BOOT0 shares pin 1 with it (PB8-BOOT0, DocID025832 Rev 4, Table 13) |
+
+`pinmap/pinmap.py` checks each net against three sources:
+- the netlist, for the pin of U1 it is on;
+- the KiCad symbol the board uses (`STM32F042F6Px`), for that pin's name;
+- stm32-metapac's metadata for the chip, for what that port can do.
+
+The build fails, naming every problem, if a net is missing, is on more
+than one pin, or sits on a pin without its function. Pins 17 and 18 have
+two names, "PA9/PA11" and "PA10/PA12": the second after the remap in
+`SYSCFG_CFGR1`. The remap is one setting for the whole chip, so the
+generator tries the board with it off and with it on, and
+`REMAP_PA11_PA12` says which fits. USB needs it on.
+
+`:pinmap_test` runs the generator on the real netlist and on edits of it
+that must fail. `:pins_test` checks the generated crate against what
+`elec/circuit.py` wires.
 
 ## Where the downloads come from
 
