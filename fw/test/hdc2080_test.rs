@@ -8,16 +8,19 @@ use hdc2080::{centi_celsius, deci_percent, line, reg, Error, Hdc2080, Raw, ADDRE
 
 // The conversions.
 
-/// Equation 2 in floating point, in hundredths of a degree; Equation 1 at
-/// or below 1.8 V, where the datasheet applies no correction.
-fn eq2(raw: u16, vdd_mv: u16) -> f64 {
-    let v = vdd_mv as f64 / 1000.0;
-    (raw as f64 / 65536.0 * 165.0 - 40.5 + if v > 1.8 { 0.08 * (v - 1.8) } else { 0.0 }) * 100.0
+/// Equation 2, exactly, in hundredths of a degree, as a fraction p / q:
+/// raw / 2^16 * 16500 - 4050 + 8 * (mV - 1800) / 1000, the correction only
+/// above 1800 mV (Equation 1 at or below).
+fn eq2(raw: u16, vdd_mv: u16) -> (i128, i128) {
+    let q: i128 = 65_536 * 1_000;
+    let corr = if vdd_mv > 1_800 { 8 * (vdd_mv as i128 - 1_800) * 65_536 } else { 0 };
+    (raw as i128 * 16_500 * 1_000 - 4_050 * q + corr, q)
 }
 
-/// Rounds half away from zero, as the crate does.
-fn round(x: f64) -> f64 {
-    x.signum() * (x.abs() + 0.5).floor()
+/// p / q rounded to the nearest integer, halves away from zero, exactly.
+fn round_away(p: i128, q: i128) -> i128 {
+    let m = (p.abs() * 2 + q) / (2 * q);
+    if p < 0 { -m } else { m }
 }
 
 #[test]
@@ -35,22 +38,31 @@ fn temperature_edges() {
     assert_eq!(centi_celsius(109, 3_600), -4_008);
     // The datasheet's lowest supply is 1.62 V (§7.3): no correction.
     assert_eq!(centi_celsius(0, 1_620), -4_050);
+    // u16's ends: nothing overflows. 0.08 * (65.535 - 1.8) = 5.0988 °C.
+    assert_eq!(centi_celsius(0, 0), -4_050);
+    assert_eq!(centi_celsius(u16::MAX, u16::MAX), 12_450 + 510);
+}
+
+#[test]
+fn temperature_halves_round_away_from_zero() {
+    // raw 8192 is 165/8 = 20.625 °C above -40.5: -19.875 °C, a half
+    // hundredth, so -19.88, away from zero. raw 57344 is 144.375 - 40.5 =
+    // 103.875 °C, so 103.88.
+    assert_eq!(centi_celsius(8_192, 1_800), -1_988);
+    assert_eq!(centi_celsius(57_344, 1_800), 10_388);
+    assert_eq!(centi_celsius(24_576, 1_800), 2_138); // 21.375
+    assert_eq!(centi_celsius(40_960, 1_800), 6_263); // 62.625
 }
 
 #[test]
 fn temperature_is_equation_2_rounded_once() {
-    // Every raw value, at supplies from 1.62 V to 3.6 V, and at the ones
-    // whose correction lands on a half hundredth (2362.5 mV).
+    // Every raw value, at supplies from 1.62 V to 3.6 V, against Equation 2
+    // computed exactly as a fraction. 2362 and 2363 mV straddle where the
+    // correction, rounded alone, would change.
     for vdd_mv in [1_620u16, 1_800, 1_801, 2_362, 2_363, 2_500, 3_300, 3_600] {
         for raw in 0..=u16::MAX {
-            let want = round(eq2(raw, vdd_mv));
-            let got = centi_celsius(raw, vdd_mv) as f64;
-            // Equal, except where the exact value is within float noise of
-            // a half and the float rounding cannot say which way.
-            let exact = eq2(raw, vdd_mv);
-            let near_half = ((exact.abs().fract()) - 0.5).abs() < 1e-9;
-            assert!(got == want || (near_half && (got - exact).abs() <= 0.5 + 1e-9),
-                "raw {} at {} mV: {} vs {} ({})", raw, vdd_mv, got, want, exact);
+            let (p, q) = eq2(raw, vdd_mv);
+            assert_eq!(centi_celsius(raw, vdd_mv) as i128, round_away(p, q), "raw {} at {} mV", raw, vdd_mv);
         }
     }
 }
@@ -61,9 +73,10 @@ fn humidity_is_equation_3_rounded() {
     // 0xFFFF is 99.998... %, rounded to 100.0.
     assert_eq!(deci_percent(0xFFFF), 1_000);
     assert_eq!(deci_percent(0x8000), 500);
+    // A half tenth: raw 4096 is 6.25 %, rounded up to 6.3.
+    assert_eq!(deci_percent(4_096), 63);
     for raw in 0..=u16::MAX {
-        let exact = raw as f64 / 65536.0 * 1000.0;
-        assert!((deci_percent(raw) as f64 - exact).abs() <= 0.5, "raw {}", raw);
+        assert_eq!(deci_percent(raw) as i128, round_away(raw as i128 * 1_000, 65_536), "raw {}", raw);
     }
 }
 
@@ -84,19 +97,24 @@ fn the_line() {
     assert_eq!(text(12_462, 999), "t=124.62 rh=99.9");
 }
 
+/// The line, as format! writes it.
+fn expected(c: i32, h: u32) -> String {
+    let sign = if c < 0 { "-" } else { "" };
+    let a = c.unsigned_abs();
+    format!("t={}{}.{:02} rh={}.{}", sign, a / 100, a % 100, h / 10, h % 10)
+}
+
 #[test]
 fn the_line_for_every_sensor_reading() {
-    // Every value the conversions give on the board, at both ends of the
-    // other: at most 17 bytes, and it reads back as the value.
-    let lo = deci_percent(0);
-    let hi = deci_percent(0xFFFF);
+    // Every temperature the board's sensor gives, and every humidity, each
+    // with the other at an end: as format! writes it, and 17 bytes at most.
     for raw in 0..=u16::MAX {
         let c = centi_celsius(raw, BOARD_VDD_MV);
-        for h in [lo, hi] {
+        let h = deci_percent(raw);
+        for (c, h) in [(c, 0), (c, 1_000), (-4_038, h), (12_462, h)] {
             let s = text(c, h);
+            assert_eq!(s, expected(c, h));
             assert!(s.len() <= 17, "{}", s);
-            let t: f64 = s[2..s.find(' ').unwrap()].parse().unwrap();
-            assert!((t * 100.0 - c as f64).abs() < 0.5, "{} for {}", s, c);
         }
     }
 }
@@ -278,7 +296,9 @@ fn bus_errors_pass_through() {
     assert_eq!(run(failing(0).data_ready()).map(|_| ()), e);
     // enable_drdy_pin: its first write fails, or its second, after the
     // first has happened (as its doc says).
-    assert_eq!(run(failing(0).enable_drdy_pin()), e);
+    let mut s = failing(0);
+    assert_eq!(run(s.enable_drdy_pin()), e);
+    assert_eq!(traffic(s), vec![], "a second write after the first failed");
     let mut s = failing(1);
     assert_eq!(run(s.enable_drdy_pin()), e);
     assert_eq!(traffic(s), vec![write(reg::INTERRUPT_ENABLE, 0x80)]);
@@ -286,7 +306,16 @@ fn bus_errors_pass_through() {
 
 #[test]
 fn another_address() {
-    let mut s = Hdc2080::new(FakeBus::default(), 0x41);
-    run(s.trigger()).unwrap();
-    assert_eq!(s.release().seen[0].0, 0x41);
+    // ADDR to VDD (Table 8-1): every write and read goes there.
+    let answers = vec![vec![0x49, 0x54, 0xD0, 0x07], vec![0x80], vec![0, 0, 0, 0]];
+    let mut s = Hdc2080::new(FakeBus { answers, ..Default::default() }, 0x41);
+    run(async {
+        s.trigger().await.unwrap();
+        s.check_id().await.unwrap();
+        s.data_ready().await.unwrap();
+        s.read().await.unwrap();
+    });
+    let t = traffic(s);
+    assert_eq!(t.len(), 4);
+    assert!(t.iter().all(|(a, _)| *a == 0x41), "{:?}", t);
 }

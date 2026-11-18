@@ -104,8 +104,12 @@ pub fn centi_celsius(raw: u16, vdd_mv: u16) -> i32 {
     const DEN: i64 = 65_536 * 1_000;
     let psrr = if vdd_mv > 1_800 { 8 * (vdd_mv as i64 - 1_800) * 65_536 } else { 0 };
     let num = raw as i64 * 16_500 * 1_000 - 4_050 * DEN + psrr;
-    let half = DEN / 2;
-    (if num >= 0 { (num + half) / DEN } else { -((-num + half) / DEN) }) as i32
+    // Rounds |num| / DEN to the nearest, halves up, without a 64-bit
+    // division (the Cortex-M0 has no divider): floor(x / (2^16 * 1000)) is
+    // floor(floor(x / 2^16) / 1000), and x / 2^16 fits a u32.
+    let x = num.unsigned_abs() + (DEN / 2) as u64;
+    let q = ((x >> 16) as u32 / 1_000) as i32;
+    if num < 0 { -q } else { q }
 }
 
 /// The relative humidity in tenths of a percent, from Equation 3 (§8.6.4):
@@ -138,8 +142,8 @@ struct Line(heapless::Vec<u8, 32>);
 
 impl Line {
     fn put(&mut self, b: &[u8]) {
-        // 32 bytes hold the longest line any input gives (29): this cannot
-        // fail. A failure would be a bug, and the line would show it cut.
+        // 32 bytes hold the longest line any input gives (29), so this
+        // cannot fail; the_line_holds_any_input checks the longest.
         let _ = self.0.extend_from_slice(b);
     }
 
