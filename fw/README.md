@@ -58,10 +58,12 @@ section serves.
 ## The pin map
 
 `//fw:pins` is a `no_std` crate with one constant per MCU net the
-firmware uses: its port and pin number and, for a peripheral signal, its
-alternate function. `//fw:pins_rs` generates it at build time from the
-board's netlist (`//elec:netlist`), so the firmware cannot drift from the
-board. `pins.json` lists the nets and what each pin must do:
+firmware uses. A net on a peripheral signal with an alternate function is
+an `AfPin`: port, pin number and alternate function. Any other net (a
+GPIO, BOOT0, and USB, whose pins are analog and have none) is a `Pin`.
+`//fw:pins_rs` generates the crate at build time from the board's netlist
+(`//elec:netlist`), so the firmware cannot drift from the board.
+`pins.json` names the chip, the part U1 must be, and the nets:
 
 | Net | Must be |
 |---|---|
@@ -70,21 +72,31 @@ board. `pins.json` lists the nets and what each pin must do:
 | `USB_DP`, `USB_DM` | USB's DP and DM |
 | `BOOT0` | PB8: BOOT0 shares pin 1 with it (PB8-BOOT0, DocID025832 Rev 4, Table 13) |
 
-`pinmap/pinmap.py` checks each net against three sources:
-- the netlist, for the pin of U1 it is on;
-- the KiCad symbol the board uses (`STM32F042F6Px`), for that pin's name;
-- stm32-metapac's metadata for the chip, for what that port can do.
+`pinmap/pinmap.py` checks, and the build fails, naming every problem:
+- **U1 is the part `pins.json` names**: its value, its KiCad library and
+  symbol, and its footprint, as the netlist records them. Another package
+  of the chip numbers its pins differently.
+- **each net is on exactly one pin of U1**, and no two nets share a pin;
+- **that pin can do what the net needs.** Its name comes from the symbol
+  the netlist names for U1, in `@kicad_libs`. What that port can do comes
+  from stm32-metapac's metadata for the chip.
 
-The build fails, naming every problem, if a net is missing, is on more
-than one pin, or sits on a pin without its function. Pins 17 and 18 have
-two names, "PA9/PA11" and "PA10/PA12": the second after the remap in
-`SYSCFG_CFGR1`. The remap is one setting for the whole chip, so the
-generator tries the board with it off and with it on, and
-`REMAP_PA11_PA12` says which fits. USB needs it on.
+The metadata is the chip's `chips/stm32f042f6/metadata.rs` and the
+numbered shard it includes. The generator follows the `include!` and
+checks the chip's name, so a metapac update that renumbers the shards
+stops the build until `MODULE.bazel`'s `chip_metadata` filegroup names
+the new one. It also fails if the metadata holds entries it does not
+parse, rather than dropping them.
 
-`:pinmap_test` runs the generator on the real netlist and on edits of it
-that must fail. `:pins_test` checks the generated crate against what
-`elec/circuit.py` wires.
+Pins 17 and 18 have two names, "PA9/PA11" and "PA10/PA12": the second
+after the remap in `SYSCFG_CFGR1`. The remap is one setting for the whole
+chip, so the generator tries the board with it off and with it on, and
+`REMAP_PA11_PA12` says which fits. USB needs it on. Any other two-name pin
+is an error.
+
+`:pinmap_test` runs the generator on the real netlist, and on edits of it
+that must fail, one for each check above. `:pins_test` checks the
+generated crate against what `elec/circuit.py` wires.
 
 ## Where the downloads come from
 
