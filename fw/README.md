@@ -1,10 +1,37 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # Firmware
 
-The sensor's firmware, in Rust, for the STM32F042F6: a Cortex-M0 with
-32 KB of flash and 6 KB of RAM (target `thumbv6m-none-eabi`). The plan is
-issue [#14](https://github.com/filmil/hdlf_example_sensor/issues/14). So
-far it is the toolchain's proof: a binary that starts and sleeps.
+The sensor's firmware, in Rust with embassy, for the STM32F042F6: a
+Cortex-M0 with 32 KB of flash and 6 KB of RAM (target
+`thumbv6m-none-eabi`). The plan is issue
+[#14](https://github.com/filmil/hdlf_example_sensor/issues/14).
+
+## What it does
+
+The board is a USB CDC serial device, VID 0x1209 and PID 0x0001
+(pid.codes' test pair). Once a second it reads the HDC2080 and sends a
+line such as `t=23.41 rh=45.2` to a terminal that has the port open. The
+LED blinks on each reading, and stays on after a sensor error until a
+reading works again.
+
+- **Clocks:** HSI48 is both the system clock and the USB clock. The CRS
+  trims it from the host's USB start-of-frame, so the board needs no
+  crystal.
+- **USB:** pins 17 and 18 become PA11 and PA12 after the `SYSCFG_CFGR1`
+  remap, which `src/main.rs` sets; the D+ pull-up is inside the chip.
+- **The sensor task:** every second it triggers a measurement, waits for
+  DRDY to rise on PA0 (EXTI, at most 100 ms), reads DRDY_STATUS (which
+  lowers the pin), reads the results and formats the line. On any error
+  it leaves the LED on and starts the sensor over on the next tick: ID
+  check, soft reset, 3 ms, the DRDY pin.
+- **The serial task** sends each line while a terminal is connected. A
+  line the host has not taken by the next one is dropped, not queued.
+- **Pins:** `src/main.rs` asserts at compile time that every pin it uses
+  is the one `//fw:pins` gives from the netlist, so a change to the board
+  that moves a pin stops the build.
+
+The flash budget test reports, for this firmware: flash 23,936 of 32,768
+bytes (73 %), and RAM 1,976 of 6,144 bytes, with 4,168 left for the stack.
 
 ```sh
 bazel build //fw:fw //fw:fw_bin   # fw.elf, and fw.bin, the raw flash image
