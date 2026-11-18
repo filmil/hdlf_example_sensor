@@ -173,8 +173,8 @@ rust_test(
     deps = [":pins"],
 )
 
-# The generator's known-bad cases: the real netlist, edited so a net is
-# missing, on a pin without its function, or splits the PA11/PA12 remap.
+# The generator's known-bad cases: the real netlist, spec and metadata,
+# edited so each check fails (pinmap/pinmap_test.py).
 py_test(
     name = "pinmap_test",
     size = "small",
@@ -185,7 +185,7 @@ py_test(
     args = [
         "--netlist $(rootpath //elec:netlist)",
         "--symbols $(rootpath @kicad_libs//:symbols/MCU_ST_STM32F0.kicad_sym)",
-        "--metadata '$(rootpaths @crates//:stm32-metapac-metadata)'",
+        "--metadata $(rootpaths @crates//:stm32-metapac-metadata)",
         "--spec $(rootpath pins.json)",
     ],
     data = _PINMAP_INPUTS.values(),

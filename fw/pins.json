@@ -1,7 +1,13 @@
 {
   "comment": "The MCU nets the firmware uses, and what each pin must do. //fw:pins_rs checks them against the netlist, the KiCad symbol and stm32-metapac's metadata (fw/pinmap/pinmap.py).",
   "chip_ref": "U1",
-  "symbol": "STM32F042F6Px",
+  "part": {
+    "value": "STM32F042F6P6",
+    "lib": "MCU_ST_STM32F0",
+    "symbol": "STM32F042F6Px",
+    "footprint": "Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm"
+  },
+  "chip": "STM32F042F6",
   "nets": {
     "LED": {"gpio": true},
     "DRDY": {"gpio": true},
