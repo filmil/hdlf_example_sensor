@@ -119,9 +119,24 @@ crate.from_cargo(
 # stm32-metapac's build script points the linker at device.x in its own
 # source directory, which Bazel's link step does not see: the patch copies
 # it into the build script's OUT_DIR, which the link step does see.
+#
+# The chip's metadata (its pins, and each peripheral's pins with their
+# alternate functions) is also a filegroup, @crates//:stm32-metapac-metadata,
+# which //fw:pins_rs checks the board's netlist against.
 crate.annotation(
+    additive_build_file_content = """
+filegroup(
+    name = "chip_metadata",
+    srcs = [
+        "src/chips/metadata_0043.rs",
+        "src/chips/stm32f042f6/metadata.rs",
+    ],
+    visibility = ["//visibility:public"],
+)
+""",
     build_script_data_glob = ["src/chips/stm32f042f6/device.x"],
     crate = "stm32-metapac",
+    extra_aliased_targets = {"stm32-metapac-metadata": "chip_metadata"},
     patch_args = ["-p1"],
     patches = ["//fw:stm32-metapac-device-x.patch"],
 )

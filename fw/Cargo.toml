@@ -34,3 +34,7 @@ panic-halt = "=1.0.0"
 # of embassy; this line only turns the feature on.
 portable-atomic = { version = "=1.15.0", features = ["critical-section"] }
 static_cell = "=2.1.1"
+# Already locked, as embassy-stm32's. Named here, with no features of its
+# own, only so the hub repository has an alias for its chip metadata, which
+# //fw:pins_rs reads (MODULE.bazel's crate.annotation).
+stm32-metapac = { version = "=21.0.0", default-features = false }

@@ -1,0 +1,17 @@
+{
+  "comment": "The MCU nets the firmware uses, and what each pin must do. //fw:pins_rs checks them against the netlist, the KiCad symbol and stm32-metapac's metadata (fw/pinmap/pinmap.py).",
+  "chip_ref": "U1",
+  "symbol": "STM32F042F6Px",
+  "nets": {
+    "LED": {"gpio": true},
+    "DRDY": {"gpio": true},
+    "I2C_SDA": {"peripheral": "I2C1", "signal": "SDA"},
+    "I2C_SCL": {"peripheral": "I2C1", "signal": "SCL"},
+    "USB_DP": {"peripheral": "USB", "signal": "DP"},
+    "USB_DM": {"peripheral": "USB", "signal": "DM"},
+    "BOOT0": {
+      "pin": "PB8",
+      "why": "BOOT0 shares pin 1 with PB8 (PB8-BOOT0: DocID025832 Rev 4, Table 13 p33); metapac's metadata does not list BOOT0"
+    }
+  }
+}

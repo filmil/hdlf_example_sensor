@@ -6,7 +6,9 @@
 # keeps: the flash and RAM budget, determinism, and the crates' licences.
 load("@hdlf_rules_netlist//netlist:defs.bzl", "determinism_test")
 load(":firmware.bzl", "firmware")
-load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_test")
+load("@rules_python//python:py_binary.bzl", "py_binary")
+load("@rules_python//python:py_test.bzl", "py_test")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -40,6 +42,7 @@ rust_binary(
     ],
     visibility = ["//visibility:private"],
     deps = [
+        ":pins",
         "@crates//:cortex-m",
         "@crates//:cortex-m-rt",
         "@crates//:embassy-executor",
@@ -118,4 +121,73 @@ filegroup(
         ":fw",
         ":fw_bin",
     ],
+)
+
+# The pin map (issue #14, step 2): pins.rs, a const per MCU net the
+# firmware uses, from the board's netlist. The build fails if a net is
+# missing or sits on a pin without the function pins.json asks for,
+# checked against the KiCad symbol and stm32-metapac's metadata.
+py_binary(
+    name = "gen_pins",
+    srcs = ["pinmap/pinmap.py"],
+    main = "pinmap/pinmap.py",
+)
+
+_PINMAP_INPUTS = {
+    "metadata": "@crates//:stm32-metapac-metadata",
+    "netlist": "//elec:netlist",
+    "spec": "pins.json",
+    "symbols": "@kicad_libs//:symbols/MCU_ST_STM32F0.kicad_sym",
+}
+
+# The inputs are tools, not srcs: tools build for the build machine, while
+# srcs would follow :fw's transition to the chip, where the netlist's own
+# tools have no toolchain.
+genrule(
+    name = "pins_rs",
+    outs = ["pins.rs"],
+    cmd = " ".join([
+        "$(execpath :gen_pins)",
+        "--netlist $(execpath //elec:netlist)",
+        "--symbols $(execpath @kicad_libs//:symbols/MCU_ST_STM32F0.kicad_sym)",
+        "$$(for m in $(execpaths @crates//:stm32-metapac-metadata); do echo --metadata $$m; done)",
+        "--spec $(execpath pins.json)",
+        "--out $@",
+    ]),
+    tools = [":gen_pins"] + _PINMAP_INPUTS.values(),
+)
+
+# The pin map as a crate, for the firmware and for host tests.
+rust_library(
+    name = "pins",
+    srcs = [":pins_rs"],
+    crate_root = ":pins_rs",
+)
+
+# What the board says, as the firmware will use it: USB on the remapped
+# PA11/PA12, I2C1 on PF0/PF1 with AF1, the LED on PA4.
+rust_test(
+    name = "pins_test",
+    size = "small",
+    srcs = ["test/pins_test.rs"],
+    deps = [":pins"],
+)
+
+# The generator's known-bad cases: the real netlist, edited so a net is
+# missing, on a pin without its function, or splits the PA11/PA12 remap.
+py_test(
+    name = "pinmap_test",
+    size = "small",
+    srcs = [
+        "pinmap/pinmap.py",
+        "pinmap/pinmap_test.py",
+    ],
+    args = [
+        "--netlist $(rootpath //elec:netlist)",
+        "--symbols $(rootpath @kicad_libs//:symbols/MCU_ST_STM32F0.kicad_sym)",
+        "--metadata '$(rootpaths @crates//:stm32-metapac-metadata)'",
+        "--spec $(rootpath pins.json)",
+    ],
+    data = _PINMAP_INPUTS.values(),
+    main = "pinmap/pinmap_test.py",
 )
