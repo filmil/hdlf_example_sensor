@@ -55,14 +55,19 @@ const MEASURE_BOTH_14_BIT: u8 = 1 << 0;
 /// DRDY_STATUS (Table 8-16).
 const DRDY_STATUS: u8 = 1 << 7;
 
-/// The longest a 14-bit humidity and temperature measurement takes, in
-/// microseconds: RHCT 660 µs plus TEMPCT 610 µs (§7.5, typical values).
-pub const MEASUREMENT_US: u32 = 660 + 610;
+/// How long a 14-bit humidity and temperature measurement typically takes,
+/// in microseconds: RHCT 660 µs plus TEMPCT 610 µs (§7.5). The datasheet
+/// gives typical values only, no maximum, so the firmware waits for
+/// DRDY_STATUS (or the DRDY pin) rather than for this long.
+pub const MEASUREMENT_TYPICAL_US: u32 = 660 + 610;
 /// The longest the sensor needs after power-up, in microseconds (§8.5.2).
+/// The datasheet gives no time for a soft reset, which reloads the same
+/// calibration (Table 8-36); waiting this long after `reset` too is this
+/// crate's choice, not TI's.
 pub const POWER_UP_US: u32 = 3_000;
 
 /// The board's supply, in millivolts: the XC6206P332 regulator's 3.3 V.
-pub const BOARD_VDD_MV: u32 = 3_300;
+pub const BOARD_VDD_MV: u16 = 3_300;
 
 /// The two raw results of one measurement.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,18 +93,19 @@ impl<E> From<E> for Error<E> {
 
 /// The temperature in hundredths of a degree Celsius, from Equation 2
 /// (§8.6.2): raw / 2^16 * 165 - 40.5 + TEMPPSRR * (VDD - 1.8 V), with
-/// TEMPPSRR 0.08 °C/V (§7.5, typical). The correction applies above 1.8 V;
-/// at or below it, this is Equation 1. Each term is rounded to the nearest
-/// hundredth.
-pub fn centi_celsius(raw: u16, vdd_mv: u32) -> i32 {
-    let scaled = ((raw as u32 * 16_500 + (1 << 15)) >> 16) as i32;
-    let psrr = if vdd_mv > 1_800 {
-        // 0.08 °C/V = 8 hundredths per volt = 8 hundredths per 1000 mV.
-        ((8 * (vdd_mv - 1_800) + 500) / 1_000) as i32
-    } else {
-        0
-    };
-    scaled - 4_050 + psrr
+/// TEMPPSRR 0.08 °C/V (§7.5, typical). The datasheet applies the correction
+/// for supplies above 1.8 V only; at or below, this is Equation 1. The
+/// result is the exact value rounded once, to the nearest hundredth, halves
+/// away from zero.
+pub fn centi_celsius(raw: u16, vdd_mv: u16) -> i32 {
+    // In units of 1 / (2^16 * 1000) of a hundredth of a degree, so every
+    // term is an integer: raw * 16500 / 2^16, then -4050, then the
+    // correction, 8 hundredths per volt, i.e. 8 * (mV - 1800) / 1000.
+    const DEN: i64 = 65_536 * 1_000;
+    let psrr = if vdd_mv > 1_800 { 8 * (vdd_mv as i64 - 1_800) * 65_536 } else { 0 };
+    let num = raw as i64 * 16_500 * 1_000 - 4_050 * DEN + psrr;
+    let half = DEN / 2;
+    (if num >= 0 { (num + half) / DEN } else { -((-num + half) / DEN) }) as i32
 }
 
 /// The relative humidity in tenths of a percent, from Equation 3 (§8.6.4):
@@ -109,38 +115,47 @@ pub fn deci_percent(raw: u16) -> u32 {
 }
 
 /// The line the firmware prints for a reading: "t=23.41 rh=45.2", with no
-/// line ending. The longest, "t=-40.50 rh=100.0", is 17 bytes.
-pub fn line(centi_c: i32, deci_rh: u32) -> heapless::Vec<u8, 24> {
-    let mut out = heapless::Vec::new();
-    // 24 bytes hold the longest line, so no push below can fail.
-    let _ = out.extend_from_slice(b"t=");
+/// line ending. The sensor's own range gives at most 17 bytes
+/// ("t=-40.50 rh=100.0", "t=124.62 rh=100.0"); the buffer holds any
+/// i32 and u32, at most 29 bytes, so no input is cut.
+pub fn line(centi_c: i32, deci_rh: u32) -> heapless::Vec<u8, 32> {
+    let mut out = Line::default();
+    out.put(b"t=");
     if centi_c < 0 {
-        let _ = out.push(b'-');
+        out.put(b"-");
     }
     let c = centi_c.unsigned_abs();
-    push_decimal(&mut out, c / 100);
-    let _ = out.push(b'.');
-    let _ = out.push(b'0' + (c / 10 % 10) as u8);
-    let _ = out.push(b'0' + (c % 10) as u8);
-    let _ = out.extend_from_slice(b" rh=");
-    push_decimal(&mut out, deci_rh / 10);
-    let _ = out.push(b'.');
-    let _ = out.push(b'0' + (deci_rh % 10) as u8);
-    out
+    out.decimal(c / 100);
+    out.put(&[b'.', b'0' + (c / 10 % 10) as u8, b'0' + (c % 10) as u8]);
+    out.put(b" rh=");
+    out.decimal(deci_rh / 10);
+    out.put(&[b'.', b'0' + (deci_rh % 10) as u8]);
+    out.0
 }
 
-fn push_decimal(out: &mut heapless::Vec<u8, 24>, mut n: u32) {
-    let mut digits = [0u8; 10];
-    let mut i = digits.len();
-    loop {
-        i -= 1;
-        digits[i] = b'0' + (n % 10) as u8;
-        n /= 10;
-        if n == 0 {
-            break;
-        }
+#[derive(Default)]
+struct Line(heapless::Vec<u8, 32>);
+
+impl Line {
+    fn put(&mut self, b: &[u8]) {
+        // 32 bytes hold the longest line any input gives (29): this cannot
+        // fail. A failure would be a bug, and the line would show it cut.
+        let _ = self.0.extend_from_slice(b);
     }
-    let _ = out.extend_from_slice(&digits[i..]);
+
+    fn decimal(&mut self, mut n: u32) {
+        let mut digits = [0u8; 10];
+        let mut i = digits.len();
+        loop {
+            i -= 1;
+            digits[i] = b'0' + (n % 10) as u8;
+            n /= 10;
+            if n == 0 {
+                break;
+            }
+        }
+        self.put(&digits[i..]);
+    }
 }
 
 /// The sensor on an I2C bus.
@@ -172,13 +187,23 @@ impl<I: I2c> Hdc2080<I> {
         Ok(())
     }
 
-    /// Resets the registers and reloads the calibration (SOFT_RES).
+    /// Resets the registers and reloads the calibration (SOFT_RES). The
+    /// caller waits `POWER_UP_US` before the next command.
     pub async fn reset(&mut self) -> Result<(), Error<I::Error>> {
         self.write(reg::RESET_DRDY_INT_CONF, SOFT_RES).await
     }
 
     /// Drives the DRDY pin high when a measurement completes, so the
-    /// firmware can wait on PA0 instead of polling.
+    /// firmware can wait on PA0 instead of polling. Level sensitive
+    /// (INT_MODE 0): the pin stays high until DRDY_STATUS is read, so the
+    /// caller reads `data_ready` after each measurement, before the next
+    /// `trigger` (§8.3).
+    ///
+    /// Like `trigger`, it writes whole registers: the firmware owns every
+    /// bit of 0x07, 0x0E and 0x0F, and wants the heater, auto measurement
+    /// and the threshold interrupts off. If the second write fails, the
+    /// first has happened; the firmware's answer to any sensor error is a
+    /// `reset` and a fresh start.
     pub async fn enable_drdy_pin(&mut self) -> Result<(), Error<I::Error>> {
         self.write(reg::INTERRUPT_ENABLE, DRDY_ENABLE).await?;
         self.write(reg::RESET_DRDY_INT_CONF, DRDY_PIN_ACTIVE_HIGH).await
