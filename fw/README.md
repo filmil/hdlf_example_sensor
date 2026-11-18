@@ -45,6 +45,7 @@ directory, which the link step does see.
 | `:licence_test` | Every crate of `Cargo.lock` is in `crate_licences.txt`, once, at its version, and its SPDX expression offers MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause or Zlib. The one exception is unicode-ident: it is `(MIT OR Apache-2.0) AND Unicode-3.0`, and accepted because it only runs on the build machine, inside proc macros. |
 | `tools:elf_test` | The ELF reader, on small ELF files the test writes byte by byte, malformed ones included. |
 | `:pinmap_test`, `:pins_test` | The pin map: see below. |
+| `:hdc2080_test` | The sensor's driver: see below. |
 
 `crate_licences.txt` holds the `license` of each crate's own
 `Cargo.toml`. A change to `Cargo.lock` must update it, or the test fails.
@@ -97,6 +98,39 @@ is an error.
 `:pinmap_test` runs the generator on the real netlist, and on edits of it
 that must fail, one for each check above. `:pins_test` checks the
 generated crate against what `elec/circuit.py` wires.
+
+## The HDC2080 driver
+
+`//fw:hdc2080` is a `no_std` crate on embedded-hal-async's `I2c` trait:
+the sensor's driver, and the line the firmware prints for each reading.
+Every register, bit and formula comes from TI's datasheet, SNAS678C (July
+2021), cited by section and table in `hdc2080/lib.rs`.
+
+- **Driver:**
+  - `check_id` reads the manufacturer and device IDs (0x5449, 0x07D0);
+  - `reset` sets SOFT_RES;
+  - `enable_drdy_pin` makes the DRDY pin (PA0) go high when a measurement
+    completes;
+  - `trigger` starts one 14-bit humidity and temperature measurement;
+  - `data_ready` reads DRDY_STATUS;
+  - `read` reads all four result bytes in one transfer, LSB first, as the
+    datasheet requires.
+- **Conversions,** in integer fixed point (the Cortex-M0 has no FPU),
+  rounded to the nearest unit:
+  - temperature in hundredths of a degree, from Equation 2, with the
+    datasheet's supply correction of 0.08 °C/V above 1.8 V; at the board's
+    3.3 V that adds 0.12 °C;
+  - humidity in tenths of a percent, from Equation 3.
+- **The line:** `t=23.41 rh=45.2`, the format the plan in #14 gives. It is
+  formatted by hand into a `heapless::Vec`, without `core::fmt`, to keep
+  flash small.
+
+`:hdc2080_test` runs on the host:
+- the conversions against Equations 1 to 3 in floating point, across the
+  whole raw range and at its edges;
+- the line, from -40.50 °C to 124.50 °C;
+- every I2C transaction the driver makes, on a fake bus that records them
+  and answers from a script, and bus errors passing through.
 
 ## Where the downloads come from
 

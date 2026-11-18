@@ -21,6 +21,8 @@ use embedded_hal_async as _;
 use heapless as _;
 // The pin map from the board's netlist (//fw:pins); step 4 uses it.
 use pins as _;
+// The sensor's driver (//fw:hdc2080); step 4 uses it.
+use hdc2080 as _;
 use static_cell as _;
 
 #[entry]

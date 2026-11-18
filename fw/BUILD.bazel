@@ -42,6 +42,7 @@ rust_binary(
     ],
     visibility = ["//visibility:private"],
     deps = [
+        ":hdc2080",
         ":pins",
         "@crates//:cortex-m",
         "@crates//:cortex-m-rt",
@@ -190,4 +191,28 @@ py_test(
     ],
     data = _PINMAP_INPUTS.values(),
     main = "pinmap/pinmap_test.py",
+)
+
+# The HDC2080 driver and the reading's line (issue #14, step 3): a no_std
+# crate, from the datasheet (SNAS678C).
+rust_library(
+    name = "hdc2080",
+    srcs = ["hdc2080/lib.rs"],
+    deps = [
+        "@crates//:embedded-hal-async",
+        "@crates//:heapless",
+    ],
+)
+
+# The driver on the host: conversions against the datasheet's formulas, the
+# line, and every transaction on a fake I2C bus.
+rust_test(
+    name = "hdc2080_test",
+    size = "small",
+    srcs = ["test/hdc2080_test.rs"],
+    deps = [
+        ":hdc2080",
+        "@crates//:embassy-futures",
+        "@crates//:embedded-hal-async",
+    ],
 )
