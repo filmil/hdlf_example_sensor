@@ -141,3 +141,16 @@ filegroup(
     patches = ["//fw:stm32-metapac-device-x.patch"],
 )
 use_repo(crate, "crates")
+
+# dfu-util 0.11, static with libusb 1.0.30, for //fw:flash (issue #14, step
+# 5): built by tools/dfu_util and mirrored as the release
+# mirror-dfu-util-0.11, which the operator uploads. //fw:flash is manual, so
+# no other build fetches it.
+http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+
+http_file(
+    name = "dfu_util",
+    executable = True,
+    sha256 = "5011353cbf7c6c21d5400a2956756c862a6581659253b958478c0003bdb21804",
+    urls = ["https://github.com/filmil/hdlf_example_sensor/releases/download/mirror-dfu-util-0.11/dfu-util"],
+)

@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# dfu-util 0.11 (https://dfu-util.sourceforge.net), GPL-2.0-or-later
+# (LICENSE, copied from its source distribution), statically linked with
+# libusb 1.0.30 (//third_party/libusb). The binary is built from pinned
+# sources by //tools/dfu_util, mirrored as the release mirror-dfu-util-0.11,
+# and fetched as @dfu_util (MODULE.bazel). Targets depend on this package,
+# never on @dfu_util directly.
+package(default_visibility = ["//visibility:public"])
+
+licenses(["restricted"])
+
+# Manual, like //fw:flash: //... does not fetch the binary.
+alias(
+    name = "dfu_util",
+    actual = "@dfu_util//file",
+    tags = ["manual"],
+)

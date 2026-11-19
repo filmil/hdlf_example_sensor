@@ -133,6 +133,38 @@ is an error.
 that must fail, one for each check above. `:pins_test` checks the
 generated crate against what `elec/circuit.py` wires.
 
+## Flashing the board
+
+```sh
+bazel run //fw:flash
+```
+
+`//fw:flash` writes `fw.bin` over the STM32F042's ROM USB DFU
+bootloader. It is for the operator, at the board: CI never builds it
+(it is `manual`), and no agent runs it.
+
+1. Close JP1, the solder jumper that pulls BOOT0 high, and plug the board
+   in. It comes up as the STM32 bootloader, USB 0483:df11.
+2. Run `bazel run //fw:flash`. It runs
+   `dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D fw.bin`, which
+   writes the internal flash from 0x08000000 and leaves DFU mode.
+3. Open JP1 again, so the board starts from flash at the next power-up.
+
+On Linux the user needs access to the device, for example through the
+udev rule in dfu-util's `doc/60-dfuse.rules`.
+
+`dfu-util` comes from `//third_party/dfu_util`: dfu-util 0.11, statically
+linked with libusb 1.0.30 (`//third_party/libusb`), so the host needs
+nothing installed. `bazel run //tools/dfu_util -- --out=DIR` builds it
+from pinned sources in a pinned Ubuntu container with podman; two builds
+give the same bytes, and the tool fails unless the binary has the sha256
+`MODULE.bazel` pins. The binary is mirrored as the release
+`mirror-dfu-util-0.11`, which the operator uploads with
+`bazel run //tools/mirror -- --dry_run=false --built_dir=DIR`.
+dfu-util is GPL-2.0-or-later and libusb LGPL-2.1-or-later; their licences
+are in `//third_party` and in the release. Neither is part of the
+firmware.
+
 ## The HDC2080 driver
 
 `//fw:hdc2080` is a `no_std` crate on embedded-hal-async's `I2c` trait:

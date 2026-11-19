@@ -42,3 +42,9 @@ go_binary(
     pure = "on",
     deps = [":mirror_lib"],
 )
+
+# //tools/dfu_util's test checks dfu-util's entry.
+exports_files(
+    ["manifest.json"],
+    visibility = ["//tools/dfu_util:__pkg__"],
+)

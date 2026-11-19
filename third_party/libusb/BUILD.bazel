@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# libusb 1.0.30 (https://libusb.info), LGPL-2.1-or-later (LICENSE, copied
+# from its source distribution). It is linked statically into the dfu-util
+# of //third_party/dfu_util, and has no target of its own.
+package(default_visibility = ["//visibility:public"])
+
+licenses(["restricted"])
+
+exports_files(["LICENSE"])

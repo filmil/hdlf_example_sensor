@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+# dfu-util, statically linked with libusb, for //fw:flash (issue #14, step
+# 5), which the operator builds by hand:
+# bazel run //tools/dfu_util -- --out=DIR. It runs build.sh in the pinned
+# Ubuntu container with podman. Its output is checked against
+# tools/mirror/manifest.json and uploaded as a mirror release; no build
+# runs it. Ported from bazel_rules_kicad's tools/kicad_prebuilt.
+
+go_library(
+    name = "dfu_util_lib",
+    srcs = ["dfu.go"],
+    embedsrcs = ["build.sh"],
+    importpath = "github.com/filmil/hdlf_example_sensor/tools/dfu_util",
+    visibility = ["//visibility:private"],
+)
+
+go_test(
+    name = "dfu_util_test",
+    size = "small",
+    srcs = ["dfu_test.go"],
+    data = [
+        "//:MODULE.bazel",
+        "//tools/mirror:manifest.json",
+    ],
+    embed = [":dfu_util_lib"],
+    pure = "on",
+    deps = ["@rules_go//go/runfiles"],
+)
+
+go_binary(
+    name = "dfu_util",
+    srcs = ["cmd/main.go"],
+    pure = "on",
+    deps = [":dfu_util_lib"],
+)
