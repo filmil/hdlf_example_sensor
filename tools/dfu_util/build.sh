@@ -14,11 +14,14 @@
 #   APT_SNAPSHOT                  the snapshot.ubuntu.com time of every package;
 #   LIBUSB_URL, LIBUSB_SHA256     libusb's release tarball;
 #   DFU_UTIL_URL, DFU_UTIL_SHA256 dfu-util's release tarball;
+#   MUSL_ORIG_URL, MUSL_ORIG_SHA256, MUSL_DEBIAN_URL, MUSL_DEBIAN_SHA256
+#                                 Ubuntu's musl source package in the snapshot;
 #   JOBS                          parallel compile jobs.
 #
-# /out receives dfu-util, the two source tarballs as downloaded under their
-# upstream names, dfu-util-licenses.tar (the licences of dfu-util, libusb
-# and musl), and SHA256SUMS,
+# /out receives dfu-util; the sources of all it links, as downloaded under
+# their upstream names (dfu-util, libusb, and musl's source package);
+# dfu-util-licenses.tar (the licences of dfu-util, libusb and musl); and
+# SHA256SUMS,
 # and only once everything has worked: a failed run leaves it empty.
 set -euo pipefail
 JOBS=${JOBS:-4}
@@ -83,6 +86,15 @@ if grep -q -e 'INTERP' -e '(NEEDED)' <<<"$headers"; then
 fi
 /work/dfu-util --version | sed -n 1p
 
+# musl's source, as the snapshot holds it: Ubuntu's source package, the
+# upstream tarball and Ubuntu's changes. The binary links musl, so the
+# release offers its source with dfu-util's and libusb's (GPL-2.0, section
+# 3; the operator's Q81).
+MUSL_ORIG=$(basename "$MUSL_ORIG_URL")
+MUSL_DEBIAN=$(basename "$MUSL_DEBIAN_URL")
+fetch "$MUSL_ORIG_URL" "$MUSL_ORIG_SHA256" "/work/$MUSL_ORIG"
+fetch "$MUSL_DEBIAN_URL" "$MUSL_DEBIAN_SHA256" "/work/$MUSL_DEBIAN"
+
 # The licences of what the binary holds: each must exist.
 mkdir -p /work/licenses/dfu-util /work/licenses/libusb /work/licenses/musl
 cp /work/dfu/COPYING /work/licenses/dfu-util/COPYING
@@ -94,6 +106,7 @@ cp /usr/share/doc/musl/copyright /work/licenses/musl/copyright
   --mtime='@0' --owner=0 --group=0 --numeric-owner -cf dfu-util-licenses.tar licenses)
 
 # Only now into /out, so a failed run leaves it empty.
-(cd /work && sha256sum dfu-util "$LIBUSB" "$DFU" dfu-util-licenses.tar > SHA256SUMS)
-cp /work/dfu-util "/work/$LIBUSB" "/work/$DFU" /work/dfu-util-licenses.tar /work/SHA256SUMS /out/
+(cd /work && sha256sum dfu-util "$LIBUSB" "$DFU" dfu-util-licenses.tar "$MUSL_ORIG" "$MUSL_DEBIAN" > SHA256SUMS)
+cp /work/dfu-util "/work/$LIBUSB" "/work/$DFU" /work/dfu-util-licenses.tar \
+  "/work/$MUSL_ORIG" "/work/$MUSL_DEBIAN" /work/SHA256SUMS /out/
 cat /out/SHA256SUMS

@@ -167,8 +167,10 @@ give the same bytes, and the tool fails unless the binary has the sha256
 `bazel run //tools/mirror -- --dry_run=false --built_dir=DIR`.
 dfu-util is GPL-2.0-or-later and libusb LGPL-2.1-or-later. musl is MIT,
 with some parts under BSD-2-Clause, BSD-3-Clause, ISC and other permissive
-terms, as its `LICENSE` lists. Their licences are in `//third_party`, and
-the release holds dfu-util's and libusb's sources as downloaded. None of the three is part
+terms, as its `LICENSE` lists. Their licences are in `//third_party`. The
+release holds the source of all three, as downloaded: dfu-util's,
+libusb's, and Ubuntu's musl source package, since dfu-util's GPL asks for
+the source of every library linked into a binary that is handed out. None of the three is part
 of the firmware.
 
 ## The HDC2080 driver

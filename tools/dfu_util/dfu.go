@@ -51,6 +51,21 @@ var DfuUtil = Input{
 	SHA256: "b4b53ba21a82ef7e3d4c47df2952adf5fa494f499b6b0b57c58c5d04ae8ff19e",
 }
 
+// MuslSource is musl's source as the snapshot holds it, Ubuntu's source
+// package for the musl that musl-tools links: the upstream tarball and
+// Ubuntu's changes. The release offers it, as dfu-util's GPL-2.0 asks for
+// every library linked into the binary (the operator's Q81).
+var MuslSource = []Input{
+	{
+		URL:    "https://snapshot.ubuntu.com/ubuntu/20261117T000000Z/pool/universe/m/musl/musl_1.2.5.orig.tar.gz",
+		SHA256: "a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4",
+	},
+	{
+		URL:    "https://snapshot.ubuntu.com/ubuntu/20261117T000000Z/pool/universe/m/musl/musl_1.2.5-3build1.debian.tar.xz",
+		SHA256: "fd50d32f31502322423ff94e982e97e53ca0902660849054414456bcf0dd4d0b",
+	},
+}
+
 // BinarySHA256 is the static dfu-util's sha256: what MODULE.bazel pins and
 // tools/mirror/manifest.json mirrors. The tool fails on any other.
 const BinarySHA256 = "95fdbb4cdaefe1762bd88f5b97ff5da1b8cf997a9bcf65c4cdf15658dd917106"
@@ -61,7 +76,8 @@ const LicensesSHA256 = "02feea0341615fcb1a5415153c6d300a4e4bec6b7a3e96abe1a5707c
 // Outputs are the files build.sh leaves in --out: the binary, the two
 // sources under their upstream names, the licences and SHA256SUMS.
 func Outputs() []string {
-	return []string{"dfu-util", filepath.Base(LibUSB.URL), filepath.Base(DfuUtil.URL), "dfu-util-licenses.tar", "SHA256SUMS"}
+	return []string{"dfu-util", filepath.Base(LibUSB.URL), filepath.Base(DfuUtil.URL), "dfu-util-licenses.tar",
+		filepath.Base(MuslSource[0].URL), filepath.Base(MuslSource[1].URL), "SHA256SUMS"}
 }
 
 //go:embed build.sh
@@ -119,6 +135,10 @@ func Command(out, ca string, jobs int) []string {
 		"LIBUSB_SHA256=" + LibUSB.SHA256,
 		"DFU_UTIL_URL=" + DfuUtil.URL,
 		"DFU_UTIL_SHA256=" + DfuUtil.SHA256,
+		"MUSL_ORIG_URL=" + MuslSource[0].URL,
+		"MUSL_ORIG_SHA256=" + MuslSource[0].SHA256,
+		"MUSL_DEBIAN_URL=" + MuslSource[1].URL,
+		"MUSL_DEBIAN_SHA256=" + MuslSource[1].SHA256,
 		fmt.Sprintf("JOBS=%d", jobs),
 	}
 	sort.Strings(env)
@@ -188,7 +208,9 @@ func SHA256SUMS() string {
 	return BinarySHA256 + "  dfu-util\n" +
 		LibUSB.SHA256 + "  " + filepath.Base(LibUSB.URL) + "\n" +
 		DfuUtil.SHA256 + "  " + filepath.Base(DfuUtil.URL) + "\n" +
-		LicensesSHA256 + "  dfu-util-licenses.tar\n"
+		LicensesSHA256 + "  dfu-util-licenses.tar\n" +
+		MuslSource[0].SHA256 + "  " + filepath.Base(MuslSource[0].URL) + "\n" +
+		MuslSource[1].SHA256 + "  " + filepath.Base(MuslSource[1].URL) + "\n"
 }
 
 // VerifyOutput checks what the build left in dir against the pins: the
@@ -200,6 +222,9 @@ func VerifyOutput(dir string) error {
 		"dfu-util-licenses.tar":    LicensesSHA256,
 		filepath.Base(LibUSB.URL):  LibUSB.SHA256,
 		filepath.Base(DfuUtil.URL): DfuUtil.SHA256,
+	}
+	for _, in := range MuslSource {
+		pins[filepath.Base(in.URL)] = in.SHA256
 	}
 	var errs []error
 	for _, name := range Outputs() {

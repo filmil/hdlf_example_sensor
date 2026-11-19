@@ -39,7 +39,7 @@ func TestInputsArePinned(t *testing.T) {
 	if !regexp.MustCompile(`^\d{8}T\d{6}Z$`).MatchString(AptSnapshot) {
 		t.Errorf("apt snapshot %q", AptSnapshot)
 	}
-	for _, in := range []Input{LibUSB, DfuUtil} {
+	for _, in := range append([]Input{LibUSB, DfuUtil}, MuslSource...) {
 		if !strings.HasPrefix(in.URL, "https://") || !sha.MatchString(in.SHA256) {
 			t.Errorf("input %+v", in)
 		}
@@ -50,6 +50,8 @@ func TestInputsArePinned(t *testing.T) {
 	for _, want := range []string{
 		`fetch "$LIBUSB_URL" "$LIBUSB_SHA256"`,
 		`fetch "$DFU_UTIL_URL" "$DFU_UTIL_SHA256"`,
+		`fetch "$MUSL_ORIG_URL" "$MUSL_ORIG_SHA256"`,
+		`fetch "$MUSL_DEBIAN_URL" "$MUSL_DEBIAN_SHA256"`,
 		`sha256sum -c -`,
 		`URIs: https://snapshot.ubuntu.com/ubuntu/$APT_SNAPSHOT/`,
 		`rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*`,
@@ -118,14 +120,16 @@ func TestCommand(t *testing.T) {
 		"APT_SNAPSHOT=" + AptSnapshot,
 		"LIBUSB_URL=" + LibUSB.URL, "LIBUSB_SHA256=" + LibUSB.SHA256,
 		"DFU_UTIL_URL=" + DfuUtil.URL, "DFU_UTIL_SHA256=" + DfuUtil.SHA256,
+		"MUSL_ORIG_URL=" + MuslSource[0].URL, "MUSL_ORIG_SHA256=" + MuslSource[0].SHA256,
+		"MUSL_DEBIAN_URL=" + MuslSource[1].URL, "MUSL_DEBIAN_SHA256=" + MuslSource[1].SHA256,
 		"JOBS=3",
 	} {
 		if !has(env, want) {
 			t.Errorf("no -e %q in %q", want, env)
 		}
 	}
-	if len(env) != 6 {
-		t.Errorf("%d -e arguments, want 6: %q", len(env), env)
+	if len(env) != 10 {
+		t.Errorf("%d -e arguments, want 10: %q", len(env), env)
 	}
 }
 
@@ -186,6 +190,14 @@ func TestMatchesModuleAndManifest(t *testing.T) {
 				if a.Built == nil || !strings.Contains(a.Built.Script, "//tools/dfu_util") {
 					t.Errorf("manifest: the licences are not built by //tools/dfu_util")
 				}
+			case "musl_1.2.5.orig.tar.gz", "musl_1.2.5-3build1.debian.tar.xz":
+				ok := false
+				for _, in := range MuslSource {
+					ok = ok || (filepath.Base(in.URL) == a.Name && a.URL == in.URL && a.SHA256 == in.SHA256)
+				}
+				if !ok {
+					t.Errorf("manifest: %s is not one of %+v", a.Name, MuslSource)
+				}
 			case "libusb-1.0.30.tar.bz2":
 				if a.URL != LibUSB.URL || a.SHA256 != LibUSB.SHA256 {
 					t.Errorf("manifest: %s is not %+v", a.Name, LibUSB)
@@ -202,7 +214,8 @@ func TestMatchesModuleAndManifest(t *testing.T) {
 			}
 		}
 	}
-	for _, name := range []string{"dfu-util", "libusb-1.0.30.tar.bz2", "dfu-util-0.11.tar.gz", "dfu-util-licenses.tar"} {
+	for _, name := range []string{"dfu-util", "libusb-1.0.30.tar.bz2", "dfu-util-0.11.tar.gz", "dfu-util-licenses.tar",
+		"musl_1.2.5.orig.tar.gz", "musl_1.2.5-3build1.debian.tar.xz"} {
 		if !found[name] {
 			t.Errorf("manifest: no asset %s in mirror-dfu-util-0.11", name)
 		}
@@ -286,7 +299,8 @@ func TestVerifyOutputEmptiesOnMismatch(t *testing.T) {
 }
 
 func TestOutputsUseUpstreamNames(t *testing.T) {
-	want := []string{"dfu-util", "libusb-1.0.30.tar.bz2", "dfu-util-0.11.tar.gz", "dfu-util-licenses.tar", "SHA256SUMS"}
+	want := []string{"dfu-util", "libusb-1.0.30.tar.bz2", "dfu-util-0.11.tar.gz", "dfu-util-licenses.tar",
+		"musl_1.2.5.orig.tar.gz", "musl_1.2.5-3build1.debian.tar.xz", "SHA256SUMS"}
 	if got := strings.Join(Outputs(), " "); got != strings.Join(want, " ") {
 		t.Errorf("Outputs() = %s", got)
 	}
@@ -399,7 +413,7 @@ func TestCheckMount(t *testing.T) {
 // SHA256SUMS must match line by line, and a wrong one empties --out too.
 func TestVerifyOutputChecksSHA256SUMS(t *testing.T) {
 	want := SHA256SUMS()
-	if strings.Count(want, "\n") != 4 || !strings.HasPrefix(want, BinarySHA256+"  dfu-util\n") {
+	if strings.Count(want, "\n") != 6 || !strings.HasPrefix(want, BinarySHA256+"  dfu-util\n") {
 		t.Errorf("SHA256SUMS() = %q", want)
 	}
 	d := t.TempDir()
