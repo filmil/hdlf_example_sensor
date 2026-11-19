@@ -48,14 +48,10 @@ rust_binary(
         "@crates//:cortex-m",
         "@crates//:cortex-m-rt",
         "@crates//:embassy-executor",
-        "@crates//:embassy-futures",
         "@crates//:embassy-stm32",
         "@crates//:embassy-sync",
         "@crates//:embassy-time",
         "@crates//:embassy-usb",
-        "@crates//:embedded-hal",
-        "@crates//:embedded-hal-async",
-        "@crates//:heapless",
         "@crates//:panic-halt",
         "@crates//:static_cell",
         "@crates//:stm32-metapac",
@@ -201,6 +197,7 @@ rust_library(
     name = "hdc2080",
     srcs = ["hdc2080/lib.rs"],
     deps = [
+        "@crates//:embassy-futures",
         "@crates//:embedded-hal-async",
         "@crates//:heapless",
     ],
@@ -215,6 +212,7 @@ rust_test(
     deps = [
         ":hdc2080",
         "@crates//:embassy-futures",
+        "@crates//:embedded-hal",
         "@crates//:embedded-hal-async",
     ],
 )

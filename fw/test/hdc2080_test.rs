@@ -4,7 +4,10 @@
 //! line format, and the driver against a fake I2C bus that records every
 //! operation in order and answers from a script.
 use embedded_hal_async::i2c::{ErrorKind, ErrorType, I2c, Operation};
-use hdc2080::{centi_celsius, deci_percent, line, reg, Error, Hdc2080, Raw, ADDRESS, BOARD_VDD_MV};
+use hdc2080::{
+    centi_celsius, deci_percent, line, reg, Error, Failure, Hdc2080, Raw, ADDRESS, BOARD_VDD_MV, DRDY_TIMEOUT_MS,
+    I2C_TIMEOUT_MS, POWER_UP_US,
+};
 
 // The conversions.
 
@@ -153,6 +156,8 @@ struct FakeBus {
     answers: Vec<Vec<u8>>,
     /// The transaction, counted from 0, that fails.
     fail_at: Option<usize>,
+    /// The transaction, counted from 0, that never completes.
+    hang_at: Option<usize>,
     count: usize,
 }
 
@@ -166,6 +171,9 @@ impl I2c for FakeBus {
         self.count += 1;
         if self.fail_at == Some(n) {
             return Err(BusError);
+        }
+        if self.hang_at == Some(n) {
+            core::future::pending::<()>().await;
         }
         let mut seen = vec![];
         for op in ops {
@@ -318,4 +326,158 @@ fn another_address() {
     let t = traffic(s);
     assert_eq!(t.len(), 4);
     assert!(t.iter().all(|(a, _)| *a == 0x41), "{:?}", t);
+}
+
+// start() and measure(): the firmware's use of the sensor, with a fake
+// delay and a fake DRDY pin.
+
+/// A delay that completes at once and records each wait, in microseconds.
+#[derive(Default)]
+struct FakeDelay {
+    waits: Vec<u32>,
+}
+
+impl embedded_hal_async::delay::DelayNs for FakeDelay {
+    async fn delay_ns(&mut self, ns: u32) {
+        self.waits.push(ns / 1_000);
+    }
+    async fn delay_us(&mut self, us: u32) {
+        self.waits.push(us);
+    }
+    async fn delay_ms(&mut self, ms: u32) {
+        self.waits.push(ms * 1_000);
+    }
+}
+
+/// A DRDY pin that is high at once, never rises, or fails.
+#[derive(Clone, Copy, PartialEq)]
+enum Drdy {
+    Rises,
+    Never,
+    Fails,
+}
+
+#[derive(Debug)]
+struct PinError;
+
+impl embedded_hal::digital::Error for PinError {
+    fn kind(&self) -> embedded_hal::digital::ErrorKind {
+        embedded_hal::digital::ErrorKind::Other
+    }
+}
+
+impl embedded_hal::digital::ErrorType for Drdy {
+    type Error = PinError;
+}
+
+impl embedded_hal_async::digital::Wait for Drdy {
+    async fn wait_for_high(&mut self) -> Result<(), PinError> {
+        match self {
+            Drdy::Rises => Ok(()),
+            Drdy::Never => core::future::pending().await,
+            Drdy::Fails => Err(PinError),
+        }
+    }
+    async fn wait_for_low(&mut self) -> Result<(), PinError> {
+        unimplemented!()
+    }
+    async fn wait_for_rising_edge(&mut self) -> Result<(), PinError> {
+        unimplemented!()
+    }
+    async fn wait_for_falling_edge(&mut self) -> Result<(), PinError> {
+        unimplemented!()
+    }
+    async fn wait_for_any_edge(&mut self) -> Result<(), PinError> {
+        unimplemented!()
+    }
+}
+
+const ID: [u8; 4] = [0x49, 0x54, 0xD0, 0x07];
+
+#[test]
+fn start_checks_resets_waits_and_routes_drdy() {
+    let mut s = sensor(vec![ID.to_vec()]);
+    let mut d = FakeDelay::default();
+    assert_eq!(run(s.start(&mut d)), Ok(()));
+    assert_eq!(
+        traffic(s),
+        vec![
+            write_read(0xFC, 4),
+            write(reg::RESET_DRDY_INT_CONF, 0x80),
+            write(reg::INTERRUPT_ENABLE, 0x80),
+            write(reg::RESET_DRDY_INT_CONF, 0x06),
+        ]
+    );
+    // The 3 ms after the reset is among the waits; the rest are timeouts
+    // that lost the race.
+    assert!(d.waits.contains(&POWER_UP_US), "{:?}", d.waits);
+}
+
+#[test]
+fn start_fails_on_another_part_and_stops() {
+    let mut s = sensor(vec![vec![0, 0, 0, 0]]);
+    assert_eq!(run(s.start(&mut FakeDelay::default())), Err(Failure::WrongId));
+    assert_eq!(traffic(s), vec![write_read(0xFC, 4)]);
+}
+
+#[test]
+fn measure_gives_the_framed_line() {
+    let t = ((23.41 - 0.12 + 40.5) / 165.0 * 65536.0f64).round() as u16;
+    let h = (0.452 * 65536.0f64).round() as u16;
+    let data: Vec<u8> = t.to_le_bytes().into_iter().chain(h.to_le_bytes()).collect();
+    let mut s = sensor(vec![vec![0x80], data]);
+    let out = run(s.measure(&mut Drdy::Rises, &mut FakeDelay::default(), BOARD_VDD_MV)).unwrap();
+    assert_eq!(out.as_slice(), b"t=23.41 rh=45.2\r\n");
+    assert_eq!(
+        traffic(s),
+        vec![write(reg::MEASUREMENT_CONFIGURATION, 0x01), write_read(0x04, 1), write_read(0x00, 4)]
+    );
+}
+
+#[test]
+fn measure_times_out_without_drdy() {
+    let mut s = sensor(vec![]);
+    let mut d = FakeDelay::default();
+    assert_eq!(run(s.measure(&mut Drdy::Never, &mut d, BOARD_VDD_MV)), Err(Failure::Timeout));
+    // Triggered, then waited DRDY_TIMEOUT_MS for the pin, and read nothing.
+    assert_eq!(traffic(s), vec![write(reg::MEASUREMENT_CONFIGURATION, 0x01)]);
+    assert!(d.waits.contains(&(DRDY_TIMEOUT_MS * 1_000)), "{:?}", d.waits);
+}
+
+#[test]
+fn measure_fails_when_drdy_status_is_clear() {
+    let mut s = sensor(vec![vec![0x00]]);
+    assert_eq!(run(s.measure(&mut Drdy::Rises, &mut FakeDelay::default(), BOARD_VDD_MV)), Err(Failure::NotReady));
+    assert_eq!(traffic(s), vec![write(reg::MEASUREMENT_CONFIGURATION, 0x01), write_read(0x04, 1)]);
+}
+
+#[test]
+fn measure_fails_when_the_pin_does() {
+    let mut s = sensor(vec![]);
+    assert_eq!(run(s.measure(&mut Drdy::Fails, &mut FakeDelay::default(), BOARD_VDD_MV)), Err(Failure::Pin));
+}
+
+#[test]
+fn a_hung_bus_times_out_at_every_call() {
+    // measure(): trigger, data_ready and read each hang in turn.
+    for (n, answers) in [(0usize, vec![]), (1, vec![]), (2, vec![vec![0x80]])] {
+        let mut s = Hdc2080::new(FakeBus { answers, hang_at: Some(n), ..Default::default() }, ADDRESS);
+        let mut d = FakeDelay::default();
+        assert_eq!(run(s.measure(&mut Drdy::Rises, &mut d, BOARD_VDD_MV)), Err(Failure::Timeout), "hang at {}", n);
+        assert!(d.waits.contains(&(I2C_TIMEOUT_MS * 1_000)), "{:?}", d.waits);
+    }
+    // start(): check_id, reset and both writes of enable_drdy_pin.
+    for n in 0..4usize {
+        let answers = if n == 0 { vec![] } else { vec![ID.to_vec()] };
+        let mut s = Hdc2080::new(FakeBus { answers, hang_at: Some(n), ..Default::default() }, ADDRESS);
+        assert_eq!(run(s.start(&mut FakeDelay::default())), Err(Failure::Timeout), "hang at {}", n);
+    }
+}
+
+#[test]
+fn bus_errors_are_failures() {
+    let mut s = failing(0);
+    assert_eq!(run(s.measure(&mut Drdy::Rises, &mut FakeDelay::default(), BOARD_VDD_MV)), Err(Failure::Bus));
+    let mut s = failing(0);
+    assert_eq!(run(s.start(&mut FakeDelay::default())), Err(Failure::Bus));
 }

@@ -20,11 +20,11 @@ use embassy_stm32::time::Hertz;
 use embassy_stm32::usb::{self, Driver};
 use embassy_stm32::{bind_interrupts, dma, exti, interrupt, Config};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
-use embassy_sync::channel::Channel;
-use embassy_time::{with_timeout, Duration, Ticker, Timer};
+use embassy_sync::signal::Signal;
+use embassy_time::{with_timeout, Delay, Duration, Ticker, Timer};
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use embassy_usb::UsbDevice;
-use hdc2080::{centi_celsius, deci_percent, line, Hdc2080, ADDRESS, BOARD_VDD_MV, POWER_UP_US};
+use hdc2080::{Framed, Hdc2080, ADDRESS, BOARD_VDD_MV};
 use panic_halt as _;
 use static_cell::StaticCell;
 
@@ -47,12 +47,10 @@ bind_interrupts!(struct Irqs {
     EXTI0_1 => exti::InterruptHandler<interrupt::typelevel::EXTI0_1>;
 });
 
-/// A line as the host sees it: the reading and "\r\n".
-type Line = heapless::Vec<u8, 34>;
-
-/// From the sensor task to the USB task. One slot: a reading the host has
-/// not taken by the next one is dropped, never queued.
-static LINES: Channel<ThreadModeRawMutex, Line, 1> = Channel::new();
+/// The latest reading, from the sensor task to the serial task. A new
+/// reading replaces one the serial task has not taken: the host gets the
+/// latest, never a queue of old ones.
+static LATEST: Signal<ThreadModeRawMutex, Framed> = Signal::new();
 
 type UsbDriver = Driver<'static, peripherals::USB>;
 
@@ -66,9 +64,15 @@ async fn main(spawner: Spawner) {
 
     // USB is on pins 17 and 18 as PA11 and PA12 only after this remap
     // (SYSCFG_CFGR1; pins::REMAP_PA11_PA12).
+    // embassy has no API for it, so the firmware writes the registers.
+    // SYSCFG's registers need its clock on: reading RCC back makes the
+    // enable complete before SYSCFG is written.
     stm32_metapac::RCC.apb2enr().modify(|w| w.set_syscfgen(true));
+    let _ = stm32_metapac::RCC.apb2enr().read();
     stm32_metapac::SYSCFG.cfgr1().modify(|w| w.set_pa11_pa12_rmp(true));
 
+    // These pins must be the ones the const block at the top asserts from
+    // //fw:pins: change both together.
     let led = Output::new(p.PA4, Level::Low, Speed::Low);
     let drdy = ExtiInput::new(p.PA0, p.EXTI0, Pull::Down, Irqs);
     let mut i2c_config = i2c::Config::default();
@@ -107,15 +111,25 @@ async fn usb_task(mut usb: UsbDevice<'static, UsbDriver>) -> ! {
     usb.run().await
 }
 
-/// Sends each line to the host while a terminal is open.
+/// Sends the latest reading to the host while a terminal has the port open
+/// (DTR set). A write the host does not take within 100 ms is dropped, so
+/// a host that stops reading never stalls the device; on a new connection,
+/// any reading taken before it is discarded.
 #[embassy_executor::task]
 async fn serial_task(mut class: CdcAcmClass<'static, UsbDriver>) -> ! {
     loop {
         class.wait_connection().await;
+        LATEST.reset();
         loop {
-            let line = LINES.receive().await;
-            if class.write_packet(&line).await.is_err() {
-                break;
+            let line = LATEST.wait().await;
+            if !class.dtr() {
+                continue;
+            }
+            match with_timeout(Duration::from_millis(100), class.write_packet(&line)).await {
+                Ok(Ok(())) | Err(_) => {}
+                // The device was unplugged or reset: wait for the next
+                // connection.
+                Ok(Err(_)) => break,
             }
         }
     }
@@ -123,55 +137,35 @@ async fn serial_task(mut class: CdcAcmClass<'static, UsbDriver>) -> ! {
 
 type Sensor = Hdc2080<I2c<'static, Async, i2c::Master>>;
 
-/// The sensor's error, whatever went wrong.
-struct Failed;
-
-/// Checks the part, resets it and routes data-ready to PA0.
-async fn start(sensor: &mut Sensor) -> Result<(), Failed> {
-    sensor.check_id().await.map_err(|_| Failed)?;
-    sensor.reset().await.map_err(|_| Failed)?;
-    Timer::after_micros(POWER_UP_US as u64).await;
-    sensor.enable_drdy_pin().await.map_err(|_| Failed)
-}
-
-/// One measurement, as the line the host gets. DRDY rises when it is done;
-/// the typical time is 1.3 ms (MEASUREMENT_TYPICAL_US), and 100 ms without
-/// it is an error. Reading DRDY_STATUS lowers the pin again.
-async fn measure(sensor: &mut Sensor, drdy: &mut ExtiInput<'static, Async>) -> Result<Line, Failed> {
-    sensor.trigger().await.map_err(|_| Failed)?;
-    with_timeout(Duration::from_millis(100), drdy.wait_for_high()).await.map_err(|_| Failed)?;
-    if !sensor.data_ready().await.map_err(|_| Failed)? {
-        return Err(Failed);
-    }
-    let raw = sensor.read().await.map_err(|_| Failed)?;
-    let mut out = Line::new();
-    let text = line(centi_celsius(raw.temperature, BOARD_VDD_MV), deci_percent(raw.humidity));
-    // 17 bytes at most, and 2 more, in 34.
-    let _ = out.extend_from_slice(&text);
-    let _ = out.extend_from_slice(b"\r\n");
-    Ok(out)
-}
-
+/// Every second: a reading, framed, to the serial task, and a 50 ms blink.
+/// On any failure (hdc2080::Failure: a bus error, a timeout of an I2C call
+/// or of DRDY, another part) the LED stays on, and the next tick starts
+/// the sensor over: ID check, soft reset, 3 ms, the DRDY pin.
 #[embassy_executor::task]
 async fn sensor_task(mut sensor: Sensor, mut drdy: ExtiInput<'static, Async>, mut led: Output<'static>) -> ! {
-    Timer::after_micros(POWER_UP_US as u64).await;
-    let mut started = start(&mut sensor).await.is_ok();
+    let mut delay = Delay;
+    // The sensor's power-up time (hdc2080::POWER_UP_US) passes in the first
+    // second of the ticker.
+    let mut started = false;
     let mut ticker = Ticker::every(Duration::from_secs(1));
     loop {
         ticker.next().await;
         if !started {
-            started = start(&mut sensor).await.is_ok();
+            started = sensor.start(&mut delay).await.is_ok();
         }
-        match if started { measure(&mut sensor, &mut drdy).await } else { Err(Failed) } {
-            Ok(line) => {
-                // try_send: a reading the host has not taken is dropped.
-                let _ = LINES.try_send(line);
+        let reading = if started {
+            sensor.measure(&mut drdy, &mut delay, BOARD_VDD_MV).await.ok()
+        } else {
+            None
+        };
+        match reading {
+            Some(line) => {
+                LATEST.signal(line);
                 led.set_high();
                 Timer::after_millis(50).await;
                 led.set_low();
             }
-            Err(Failed) => {
-                // On until a reading works; the next tick starts over.
+            None => {
                 led.set_high();
                 started = false;
             }
