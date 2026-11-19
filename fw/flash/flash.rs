@@ -1,33 +1,40 @@
 // SPDX-License-Identifier: Apache-2.0
 //! bazel run //fw:flash: writes fw.bin to the STM32F042's flash over its
-//! ROM USB DFU bootloader (issue #14, step 5). Close JP1 (BOOT0 high), plug
-//! the board in, and run it; open JP1 again afterwards. Manual only: no
-//! CI, and no agent, runs it.
+//! ROM USB DFU bootloader (issue #14, step 5). fw/README.md gives the
+//! steps. Manual only: no CI, and no agent, runs it.
 //!
-//! It runs the static dfu-util of //tools/dfu_util:
+//! It runs the static dfu-util of //third_party/dfu_util with the
+//! arguments of flash_lib::dfu_args:
 //!
 //!     dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D fw.bin
-//!
-//! 0483:df11 is the STM32 bootloader in dfu-util 0.11's
-//! doc/60-dfuse.rules; "-a 0 -s ADDRESS:leave -D FILE" writes the internal
-//! flash at ADDRESS and leaves DFU mode, the form dfu-util's man page gives
-//! for STM32 parts. 0x08000000 is the start of flash (fw/memory.x).
+use runfiles::{rlocation, Runfiles};
 use std::process::{Command, ExitCode};
 
+fn run() -> Result<(), String> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    flash_lib::check_args(&args)?;
+    // The files come from the runfiles, so it works from any directory.
+    let r = Runfiles::create().map_err(|e| format!("no runfiles: {}", e))?;
+    let find = |p: &str| rlocation!(r, p).ok_or_else(|| format!("{} is not in the runfiles", p));
+    let dfu_util = find(env!("DFU_UTIL"))?;
+    let fw_bin = find(env!("FW_BIN"))?;
+    let dfu_args = flash_lib::dfu_args(&fw_bin.to_string_lossy());
+    println!("flash: {} {}", dfu_util.display(), dfu_args.join(" "));
+    let status = Command::new(&dfu_util)
+        .args(&dfu_args)
+        .status()
+        .map_err(|e| format!("cannot run {}: {}", dfu_util.display(), e))?;
+    if !status.success() {
+        return Err(format!("dfu-util failed: {}", status));
+    }
+    Ok(())
+}
+
 fn main() -> ExitCode {
-    // bazel run starts this in its runfiles, where these paths resolve.
-    let dfu_util = env!("DFU_UTIL");
-    let fw_bin = env!("FW_BIN");
-    let args = ["-d", "0483:df11", "-a", "0", "-s", "0x08000000:leave", "-D", fw_bin];
-    println!("flash: {} {}", dfu_util, args.join(" "));
-    match Command::new(dfu_util).args(args).status() {
-        Ok(s) if s.success() => ExitCode::SUCCESS,
-        Ok(s) => {
-            eprintln!("flash: dfu-util failed: {}", s);
-            ExitCode::FAILURE
-        }
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("flash: cannot run {}: {}", dfu_util, e);
+            eprintln!("flash: {}", e);
             ExitCode::FAILURE
         }
     }

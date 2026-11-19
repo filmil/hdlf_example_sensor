@@ -143,12 +143,14 @@ bazel run //fw:flash
 bootloader. It is for the operator, at the board: CI never builds it
 (it is `manual`), and no agent runs it.
 
-1. Close JP1, the solder jumper that pulls BOOT0 high, and plug the board
-   in. It comes up as the STM32 bootloader, USB 0483:df11.
-2. Run `bazel run //fw:flash`. It runs
+1. With the board unplugged, close JP1, the solder jumper that pulls
+   BOOT0 high. Then plug the board in. It comes up as the STM32
+   bootloader, USB 0483:df11. Have no other STM32 bootloader on USB.
+2. Run `bazel run //fw:flash`, with no arguments: it refuses any. It runs
    `dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D fw.bin`, which
    writes the internal flash from 0x08000000 and leaves DFU mode.
-3. Open JP1 again, so the board starts from flash at the next power-up.
+3. Unplug the board, open JP1 again, and plug it back in: it starts from
+   flash.
 
 On Linux the user needs access to the device, for example through the
 udev rule in dfu-util's `doc/60-dfuse.rules`.

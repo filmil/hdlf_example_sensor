@@ -176,6 +176,13 @@ func TestMatchesModuleAndManifest(t *testing.T) {
 				if want := "https://github.com/" + m.Repo + "/releases/download/" + r.Tag + "/dfu-util"; pin[2] != want {
 					t.Errorf("MODULE.bazel fetches %s, the mirror is %s", pin[2], want)
 				}
+			case "dfu-util-licenses.tar":
+				if a.SHA256 != LicensesSHA256 {
+					t.Errorf("manifest: the licences have sha256 %s, the tool %s", a.SHA256, LicensesSHA256)
+				}
+				if a.Built == nil || !strings.Contains(a.Built.Script, "//tools/dfu_util") {
+					t.Errorf("manifest: the licences are not built by //tools/dfu_util")
+				}
 			case "libusb-1.0.30.tar.bz2":
 				if a.URL != LibUSB.URL || a.SHA256 != LibUSB.SHA256 {
 					t.Errorf("manifest: %s is not %+v", a.Name, LibUSB)
@@ -186,7 +193,7 @@ func TestMatchesModuleAndManifest(t *testing.T) {
 				}
 			}
 		}
-		for _, want := range []string{LibUSB.URL, LibUSB.SHA256, DfuUtil.URL, DfuUtil.SHA256, "GPL-2.0-or-later", "LGPL-2.1-or-later"} {
+		for _, want := range []string{LibUSB.URL, LibUSB.SHA256, DfuUtil.URL, DfuUtil.SHA256, AptSnapshot, "GPL-2.0-or-later", "LGPL-2.1-or-later"} {
 			if !strings.Contains(r.Notes, want) {
 				t.Errorf("manifest: the notes of %s do not name %s", r.Tag, want)
 			}
@@ -241,18 +248,49 @@ func TestCheckOut(t *testing.T) {
 	}
 }
 
-func TestVerifyBinary(t *testing.T) {
+func TestVerifyFile(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "dfu-util")
-	if err := os.WriteFile(p, []byte("not the archive"), 0o644); err != nil {
+	if err := os.WriteFile(p, []byte("not the binary"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	h := sha256.Sum256([]byte("not the archive"))
-	err := VerifyBinary(p)
-	if err == nil || !strings.Contains(err.Error(), hex.EncodeToString(h[:])) {
-		t.Errorf("a wrong binary: %v", err)
+	h := sha256.Sum256([]byte("not the binary"))
+	got := hex.EncodeToString(h[:])
+	if err := VerifyFile(p, got); err != nil {
+		t.Errorf("the matching sha256: %v", err)
 	}
-	if err := VerifyBinary(filepath.Join(t.TempDir(), "missing")); err == nil {
-		t.Error("a missing binary passed")
+	if err := VerifyFile(p, BinarySHA256); err == nil || !strings.Contains(err.Error(), got) {
+		t.Errorf("a wrong file: %v", err)
+	}
+	if err := VerifyFile(filepath.Join(t.TempDir(), "missing"), got); err == nil {
+		t.Error("a missing file passed")
+	}
+}
+
+// A run whose output does not match the pins leaves --out empty.
+func TestVerifyOutputEmptiesOnMismatch(t *testing.T) {
+	d := t.TempDir()
+	for _, name := range Outputs() {
+		if err := os.WriteFile(filepath.Join(d, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := VerifyOutput(d); err == nil {
+		t.Fatal("wrong outputs passed")
+	}
+	if left, _ := os.ReadDir(d); len(left) != 0 {
+		t.Errorf("--out still holds %d files", len(left))
+	}
+}
+
+func TestOutputsUseUpstreamNames(t *testing.T) {
+	want := []string{"dfu-util", "libusb-1.0.30.tar.bz2", "dfu-util-0.11.tar.gz", "dfu-util-licenses.tar", "SHA256SUMS"}
+	if got := strings.Join(Outputs(), " "); got != strings.Join(want, " ") {
+		t.Errorf("Outputs() = %s", got)
+	}
+	for _, want := range []string{`LIBUSB=$(basename "$LIBUSB_URL")`, `DFU=$(basename "$DFU_UTIL_URL")`} {
+		if !strings.Contains(BuildScript, want) {
+			t.Errorf("build.sh lacks %q", want)
+		}
 	}
 }
 
@@ -288,9 +326,14 @@ func TestFindCABundle(t *testing.T) {
 
 // --dry_run prints a command a shell runs as it is: quoted arguments, and
 // the script as a here-document on standard input.
+// --dry_run prints a command a shell runs as it is: it creates --out, and
+// passes quoted arguments and the script as a here-document.
 func TestDryRun(t *testing.T) {
-	out := DryRun(Command("/tmp/my out", "/ca.crt", 2))
+	out := DryRun("/tmp/my out", Command("/tmp/my out", "/tmp/ca/ca.crt", 2))
 	first, rest, _ := strings.Cut(out, "\n")
+	if !strings.HasPrefix(first, "mkdir -p '/tmp/my out' && podman run") {
+		t.Errorf("no mkdir of --out first: %s", first)
+	}
 	if !strings.Contains(first, "-v '/tmp/my out:/out:Z'") {
 		t.Errorf("the path with a space is not quoted: %s", first)
 	}
@@ -302,6 +345,11 @@ func TestDryRun(t *testing.T) {
 	}
 	if strings.Contains(BuildScript, "\nBUILD_SH\n") {
 		t.Error("the script contains the here-document's end marker")
+	}
+	for _, host := range CABundles {
+		if strings.Contains(first, host+":") {
+			t.Errorf("the command mounts the host's CA bundle %s", host)
+		}
 	}
 	if got := Quote([]string{"a", "it's", "x y"}); got != `a 'it'\''s' 'x y'` {
 		t.Errorf("Quote: %s", got)

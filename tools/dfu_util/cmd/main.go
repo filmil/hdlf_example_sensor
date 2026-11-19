@@ -31,6 +31,9 @@ func run() error {
 	jobs := flag.Int("jobs", 4, "parallel compile jobs, and the container's CPUs")
 	dry := flag.Bool("dry_run", false, "print the command, with the script as a here-document; run nothing")
 	flag.Parse()
+	if flag.NArg() > 0 {
+		return fmt.Errorf("unexpected arguments %q; give --out, --jobs or --dry_run", flag.Args())
+	}
 	if *jobs < 1 {
 		return fmt.Errorf("--jobs must be 1 or more")
 	}
@@ -39,24 +42,20 @@ func run() error {
 		return err
 	}
 	if *dry {
-		ca, err := dfuutil.FindCABundle()
+		// The printed command mounts a copy of the CA bundle, made now and
+		// left for it, never the host's file, which :Z would relabel.
+		tmp, err := os.MkdirTemp("", "dfu-util-ca-")
 		if err != nil {
 			return err
 		}
-		// The run mounts a copy of it; the dry run names the bundle itself.
-		fmt.Print(dfuutil.DryRun(dfuutil.Command(abs, ca, *jobs)))
+		ca, err := dfuutil.CopyCABundle(tmp)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("# The command mounts %s, a copy of the host's CA bundle; delete %s after.\n", ca, tmp)
+		fmt.Print(dfuutil.DryRun(abs, dfuutil.Command(abs, ca, *jobs)))
 		return nil
 	}
-	tmp, err := os.MkdirTemp("", "dfu-util-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tmp)
-	ca, err := dfuutil.CopyCABundle(tmp)
-	if err != nil {
-		return err
-	}
-	cmd := dfuutil.Command(abs, ca, *jobs)
 	if err := dfuutil.CheckOut(abs); err != nil {
 		return err
 	}
@@ -69,11 +68,11 @@ func run() error {
 	if err := c.Run(); err != nil {
 		return err
 	}
-	bin := filepath.Join(abs, "dfu-util")
-	if err := dfuutil.VerifyBinary(bin); err != nil {
+	// On a mismatch this empties --out again: nothing unverified is left.
+	if err := dfuutil.VerifyOutput(abs); err != nil {
 		return err
 	}
-	fmt.Printf("ok %s: sha256 %s, as pinned\n", bin, dfuutil.BinarySHA256)
+	fmt.Printf("ok %s: dfu-util has sha256 %s, as pinned, and so do its sources and licences\n", abs, dfuutil.BinarySHA256)
 	return nil
 }
 

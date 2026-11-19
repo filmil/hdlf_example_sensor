@@ -13,8 +13,9 @@
 #   DFU_UTIL_URL, DFU_UTIL_SHA256 dfu-util's release tarball;
 #   JOBS                          parallel compile jobs.
 #
-# /out receives dfu-util, the two source tarballs as downloaded,
-# dfu-util-licenses.tar (dfu-util's and libusb's licences), and SHA256SUMS,
+# /out receives dfu-util, the two source tarballs as downloaded under their
+# upstream names, dfu-util-licenses.tar (the licences of dfu-util and
+# libusb), and SHA256SUMS,
 # and only once everything has worked: a failed run leaves it empty.
 set -euo pipefail
 JOBS=${JOBS:-4}
@@ -35,7 +36,7 @@ SRC
 APT=(-o Acquire::https::CaInfo=/host-ca.crt -o Acquire::Retries=3)
 apt-get "${APT[@]}" update -q
 DEBIAN_FRONTEND=noninteractive apt-get "${APT[@]}" install -y -q --no-install-recommends \
-  ca-certificates curl bzip2 xz-utils gcc libc6-dev make pkg-config
+  ca-certificates curl bzip2 xz-utils gcc libc6-dev binutils make pkg-config
 
 fetch() { # URL SHA256 FILE
   curl -fsSL --retry 5 --retry-all-errors -o "$3" "$1"
@@ -45,23 +46,28 @@ fetch() { # URL SHA256 FILE
 # The same paths and times every run, so two builds give the same bytes.
 FLAGS="-O2 -ffile-prefix-map=/work=. -fdebug-prefix-map=/work=."
 P=/work/prefix
+LIBUSB=$(basename "$LIBUSB_URL")
+DFU=$(basename "$DFU_UTIL_URL")
 
 # libusb, static, without udev: dfu-util lists devices itself.
-fetch "$LIBUSB_URL" "$LIBUSB_SHA256" /work/libusb.tar.bz2
-mkdir -p /work/libusb && tar -xjf /work/libusb.tar.bz2 -C /work/libusb --strip-components=1
+fetch "$LIBUSB_URL" "$LIBUSB_SHA256" "/work/$LIBUSB"
+mkdir -p /work/libusb && tar -xjf "/work/$LIBUSB" -C /work/libusb --strip-components=1
 (cd /work/libusb && CFLAGS="$FLAGS" ./configure --prefix=$P --enable-static --disable-shared \
   --disable-udev --disable-examples-build --disable-tests-build && make -j"$JOBS" && make install)
 
 # dfu-util, linked statically with that libusb.
-fetch "$DFU_UTIL_URL" "$DFU_UTIL_SHA256" /work/dfu-util.tar.gz
-mkdir -p /work/dfu && tar -xzf /work/dfu-util.tar.gz -C /work/dfu --strip-components=1
+fetch "$DFU_UTIL_URL" "$DFU_UTIL_SHA256" "/work/$DFU"
+mkdir -p /work/dfu && tar -xzf "/work/$DFU" -C /work/dfu --strip-components=1
 (cd /work/dfu && PKG_CONFIG_PATH=$P/lib/pkgconfig CFLAGS="$FLAGS" LDFLAGS="-static" \
   ./configure --prefix=$P && make -j"$JOBS" && make install)
 cp $P/bin/dfu-util /work/dfu-util
 strip --strip-all /work/dfu-util
-# A static binary: it runs on any x86_64 Linux, with nothing installed.
-if file_out=$(LC_ALL=C ldd /work/dfu-util 2>&1); then
-  echo "dfu-util is not static: $file_out" >&2
+# A static binary, so it runs on any x86_64 Linux with nothing installed:
+# no program interpreter, and no shared library it needs.
+headers=$(readelf -l -d /work/dfu-util)
+if grep -q -e 'INTERP' -e '(NEEDED)' <<<"$headers"; then
+  echo "dfu-util is not static:" >&2
+  grep -e 'INTERP' -e '(NEEDED)' <<<"$headers" >&2
   exit 1
 fi
 /work/dfu-util --version | sed -n 1p
@@ -74,6 +80,6 @@ cp /work/libusb/COPYING /work/licenses/libusb/COPYING
   --mtime='@0' --owner=0 --group=0 --numeric-owner -cf dfu-util-licenses.tar licenses)
 
 # Only now into /out, so a failed run leaves it empty.
-(cd /work && sha256sum dfu-util libusb.tar.bz2 dfu-util.tar.gz dfu-util-licenses.tar > SHA256SUMS)
-cp /work/dfu-util /work/libusb.tar.bz2 /work/dfu-util.tar.gz /work/dfu-util-licenses.tar /work/SHA256SUMS /out/
+(cd /work && sha256sum dfu-util "$LIBUSB" "$DFU" dfu-util-licenses.tar > SHA256SUMS)
+cp /work/dfu-util "/work/$LIBUSB" "/work/$DFU" /work/dfu-util-licenses.tar /work/SHA256SUMS /out/
 cat /out/SHA256SUMS

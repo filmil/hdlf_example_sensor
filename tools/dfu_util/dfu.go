@@ -54,6 +54,15 @@ var DfuUtil = Input{
 // tools/mirror/manifest.json mirrors. The tool fails on any other.
 const BinarySHA256 = "5011353cbf7c6c21d5400a2956756c862a6581659253b958478c0003bdb21804"
 
+// LicensesSHA256 is dfu-util-licenses.tar's sha256, as the manifest pins it.
+const LicensesSHA256 = "9175386b10b117b598480bf328070e3f9f6ba8cfe6387f4d1e62cbf628099e32"
+
+// Outputs are the files build.sh leaves in --out: the binary, the two
+// sources under their upstream names, the licences and SHA256SUMS.
+func Outputs() []string {
+	return []string{"dfu-util", filepath.Base(LibUSB.URL), filepath.Base(DfuUtil.URL), "dfu-util-licenses.tar", "SHA256SUMS"}
+}
+
 //go:embed build.sh
 var BuildScript string
 
@@ -155,8 +164,8 @@ func CheckOut(dir string) error {
 	return nil
 }
 
-// VerifyBinary fails unless the file at p has the sha256 MODULE.bazel pins.
-func VerifyBinary(p string) error {
+// VerifyFile fails unless the file at p has the sha256 want.
+func VerifyFile(p, want string) error {
 	f, err := os.Open(p)
 	if err != nil {
 		return err
@@ -166,10 +175,39 @@ func VerifyBinary(p string) error {
 	if _, err := io.Copy(h, f); err != nil {
 		return err
 	}
-	if got := hex.EncodeToString(h.Sum(nil)); got != BinarySHA256 {
-		return fmt.Errorf("%s has sha256 %s; MODULE.bazel pins %s", p, got, BinarySHA256)
+	if got := hex.EncodeToString(h.Sum(nil)); got != want {
+		return fmt.Errorf("%s has sha256 %s; want %s", p, got, want)
 	}
 	return nil
+}
+
+// VerifyOutput checks what the build left in dir against the pins: the
+// binary, the licences and both sources. On any mismatch it removes every
+// output, so that a failed run leaves dir empty, and returns the error.
+func VerifyOutput(dir string) error {
+	pins := map[string]string{
+		"dfu-util":                  BinarySHA256,
+		"dfu-util-licenses.tar":     LicensesSHA256,
+		filepath.Base(LibUSB.URL):   LibUSB.SHA256,
+		filepath.Base(DfuUtil.URL):  DfuUtil.SHA256,
+	}
+	var errs []error
+	for _, name := range Outputs() {
+		want, pinned := pins[name]
+		if !pinned {
+			continue
+		}
+		if err := VerifyFile(filepath.Join(dir, name), want); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) == 0 {
+		return nil
+	}
+	for _, name := range Outputs() {
+		os.Remove(filepath.Join(dir, name))
+	}
+	return errors.Join(errs...)
 }
 
 var plainArg = regexp.MustCompile(`^[\w@%+=:,./-]+$`)
@@ -187,8 +225,10 @@ func Quote(argv []string) string {
 	return strings.Join(out, " ")
 }
 
-// DryRun returns what --dry_run prints: the podman command with the script
-// as a here-document on its standard input, which a shell runs as it is.
-func DryRun(argv []string) string {
-	return Quote(argv) + " <<'BUILD_SH'\n" + strings.TrimSuffix(BuildScript, "\n") + "\nBUILD_SH\n"
+// DryRun returns what --dry_run prints for out: a command that creates out
+// and runs podman with the script as a here-document on its standard input,
+// which a shell runs as it is. argv must mount a copy of the CA bundle,
+// never the host's file (CopyCABundle).
+func DryRun(out string, argv []string) string {
+	return Quote([]string{"mkdir", "-p", out}) + " && " + Quote(argv) + " <<'BUILD_SH'\n" + strings.TrimSuffix(BuildScript, "\n") + "\nBUILD_SH\n"
 }
