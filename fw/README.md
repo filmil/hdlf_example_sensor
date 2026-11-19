@@ -168,8 +168,7 @@ give the same bytes, and the tool fails unless the binary has the sha256
 dfu-util is GPL-2.0-or-later and libusb LGPL-2.1-or-later. musl is MIT,
 with some parts under BSD-2-Clause, BSD-3-Clause, ISC and other permissive
 terms, as its `LICENSE` lists. Their licences are in `//third_party`, and
-the release holds the source of all three, as dfu-util's GPL asks of a
-binary that links them. None of the three is part
+the release holds dfu-util's and libusb's sources as downloaded. None of the three is part
 of the firmware.
 
 ## The HDC2080 driver
