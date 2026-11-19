@@ -1,10 +1,44 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # Firmware
 
-The sensor's firmware, in Rust, for the STM32F042F6: a Cortex-M0 with
-32 KB of flash and 6 KB of RAM (target `thumbv6m-none-eabi`). The plan is
-issue [#14](https://github.com/filmil/hdlf_example_sensor/issues/14). So
-far it is the toolchain's proof: a binary that starts and sleeps.
+The sensor's firmware, in Rust with embassy, for the STM32F042F6: a
+Cortex-M0 with 32 KB of flash and 6 KB of RAM (target
+`thumbv6m-none-eabi`). The plan is issue
+[#14](https://github.com/filmil/hdlf_example_sensor/issues/14).
+
+## What it does
+
+The board is a USB CDC serial device, VID 0x1209 and PID 0x0001
+(pid.codes' test pair). Once a second it reads the HDC2080 and sends a
+line such as `t=23.41 rh=45.2` to a terminal that has the port open
+(DTR set). The
+LED blinks on each reading, and stays on after a sensor error until a
+reading works again.
+
+- **Clocks:** HSI48 is both the system clock and the USB clock. The CRS
+  trims it from the host's USB start-of-frame, so the board needs no
+  crystal.
+- **USB:** pins 17 and 18 become PA11 and PA12 after the `SYSCFG_CFGR1`
+  remap, which `src/main.rs` sets; the D+ pull-up is inside the chip.
+- **The sensor task:** every second it calls the driver's `measure`:
+  trigger, wait for DRDY to rise on PA0 (EXTI, at most 100 ms), read
+  DRDY_STATUS (which lowers the pin), read the results, format the line.
+  Every I2C call has a 50 ms timeout, so a stuck bus fails rather than
+  hangs. On any failure the LED stays on and the next tick calls `start`
+  again: ID check, soft reset, 3 ms, the DRDY pin. `start` and `measure`
+  live in `//fw:hdc2080`, generic over embedded-hal-async's traits, and
+  are host-tested there with a fake bus, pin and delay.
+- **The serial task** keeps only the latest reading: a new one replaces
+  one not yet sent. It writes only while the terminal holds DTR, gives
+  each write 100 ms, so a host that stops reading never stalls the
+  device, and discards any reading from before a new connection.
+- **Pins:** `src/main.rs` asserts at compile time that every pin it uses
+  is the one `//fw:pins` gives from the netlist, so a change to the board
+  that moves a pin stops the build.
+
+The flash budget test reports, for this firmware: flash 24,112 of 32,768
+bytes (73.6 %), and RAM 2,228 of 6,144 bytes, with 3,916 left for the
+stack.
 
 ```sh
 bazel build //fw:fw //fw:fw_bin   # fw.elf, and fw.bin, the raw flash image

@@ -241,3 +241,86 @@ impl<I: I2c> Hdc2080<I> {
         Ok(())
     }
 }
+
+// The firmware's use of the sensor, generic over embedded-hal-async's
+// traits so that the host can test it: the DRDY pin is a `Wait`, and every
+// timeout comes from a `DelayNs`.
+
+use embassy_futures::select::{select, Either};
+use embedded_hal_async::delay::DelayNs;
+use embedded_hal_async::digital::Wait;
+
+/// The longest any one I2C call may take before the firmware gives up on
+/// it, in milliseconds: at 100 kHz the longest call, 6 bytes, takes under
+/// 1 ms. A sensor holding the bus low would otherwise hang the firmware.
+pub const I2C_TIMEOUT_MS: u32 = 50;
+/// The longest the firmware waits for DRDY after a trigger, in
+/// milliseconds: about 80 times the typical 1.27 ms.
+pub const DRDY_TIMEOUT_MS: u32 = 100;
+
+/// A line as the host gets it: the reading and "\r\n". `line` gives at
+/// most 32 bytes, so 34 always hold it.
+pub type Framed = heapless::Vec<u8, 34>;
+
+/// Why a reading failed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Failure {
+    /// The bus returned an error.
+    Bus,
+    /// The part is not an HDC2080.
+    WrongId,
+    /// An I2C call, or DRDY, took longer than its timeout.
+    Timeout,
+    /// DRDY rose but DRDY_STATUS was clear.
+    NotReady,
+    /// The DRDY pin returned an error.
+    Pin,
+}
+
+impl<E> From<Error<E>> for Failure {
+    fn from(e: Error<E>) -> Self {
+        match e {
+            Error::I2c(_) => Failure::Bus,
+            Error::WrongId(..) => Failure::WrongId,
+        }
+    }
+}
+
+/// Runs `f`, or fails with Timeout after `ms` milliseconds.
+async fn timed<F: core::future::Future, D: DelayNs>(delay: &mut D, ms: u32, f: F) -> Result<F::Output, Failure> {
+    match select(f, delay.delay_ms(ms)).await {
+        Either::First(out) => Ok(out),
+        Either::Second(()) => Err(Failure::Timeout),
+    }
+}
+
+impl<I: I2c> Hdc2080<I> {
+    /// Brings the sensor up: checks its ID, soft-resets it, waits
+    /// `POWER_UP_US`, and routes data-ready to the DRDY pin. The firmware
+    /// calls it at start and after any failure.
+    pub async fn start<D: DelayNs>(&mut self, delay: &mut D) -> Result<(), Failure> {
+        timed(delay, I2C_TIMEOUT_MS, self.check_id()).await??;
+        timed(delay, I2C_TIMEOUT_MS, self.reset()).await??;
+        delay.delay_us(POWER_UP_US).await;
+        timed(delay, I2C_TIMEOUT_MS, self.enable_drdy_pin()).await??;
+        Ok(())
+    }
+
+    /// One reading, framed for the host: trigger, wait for DRDY (at most
+    /// `DRDY_TIMEOUT_MS`), read DRDY_STATUS (which lowers the pin), read the
+    /// results, convert at `vdd_mv`, and format.
+    pub async fn measure<P: Wait, D: DelayNs>(&mut self, drdy: &mut P, delay: &mut D, vdd_mv: u16) -> Result<Framed, Failure> {
+        timed(delay, I2C_TIMEOUT_MS, self.trigger()).await??;
+        timed(delay, DRDY_TIMEOUT_MS, drdy.wait_for_high()).await?.map_err(|_| Failure::Pin)?;
+        if !timed(delay, I2C_TIMEOUT_MS, self.data_ready()).await?? {
+            return Err(Failure::NotReady);
+        }
+        let raw = timed(delay, I2C_TIMEOUT_MS, self.read()).await??;
+        let text = line(centi_celsius(raw.temperature, vdd_mv), deci_percent(raw.humidity));
+        let mut out = Framed::new();
+        // 32 + 2 bytes fit 34 (Framed's doc), so neither can fail.
+        out.extend_from_slice(&text).map_err(|_| Failure::Bus)?;
+        out.extend_from_slice(b"\r\n").map_err(|_| Failure::Bus)?;
+        Ok(out)
+    }
+}
