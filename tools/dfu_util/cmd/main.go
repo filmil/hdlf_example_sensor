@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	dfuutil "github.com/filmil/hdlf_example_sensor/tools/dfu_util"
@@ -62,6 +61,18 @@ func run() error {
 	if err := os.MkdirAll(abs, 0o755); err != nil {
 		return err
 	}
+	// The container mounts a copy of the CA bundle, removed after the run;
+	// never the host's file, which :Z would relabel.
+	tmp, err := os.MkdirTemp("", "dfu-util-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	ca, err := dfuutil.CopyCABundle(tmp)
+	if err != nil {
+		return err
+	}
+	cmd := dfuutil.Command(abs, ca, *jobs)
 	c := exec.Command(cmd[0], cmd[1:]...)
 	c.Stdin = strings.NewReader(dfuutil.BuildScript)
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
