@@ -1,8 +1,11 @@
 #!/bin/bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# Builds dfu-util, statically linked with libusb, for //fw:flash (issue
-# #14, step 5). It runs inside the pinned Ubuntu container that
+# Builds dfu-util, statically linked with libusb and musl, for //fw:flash
+# (issue #14, step 5). musl, not glibc: a static glibc would put glibc
+# (LGPL-2.1) into the binary we redistribute; musl is MIT.
+#
+# It runs inside the pinned Ubuntu container that
 # `bazel run //tools/dfu_util` starts, never on the host. The Go tool
 # embeds this file, mounts the output directory at /out and a copy of the
 # host's CA bundle at /host-ca.crt (read-only), and passes the pinned
@@ -14,8 +17,8 @@
 #   JOBS                          parallel compile jobs.
 #
 # /out receives dfu-util, the two source tarballs as downloaded under their
-# upstream names, dfu-util-licenses.tar (the licences of dfu-util and
-# libusb), and SHA256SUMS,
+# upstream names, dfu-util-licenses.tar (the licences of dfu-util, libusb
+# and musl), and SHA256SUMS,
 # and only once everything has worked: a failed run leaves it empty.
 set -euo pipefail
 JOBS=${JOBS:-4}
@@ -36,7 +39,7 @@ SRC
 APT=(-o Acquire::https::CaInfo=/host-ca.crt -o Acquire::Retries=3)
 apt-get "${APT[@]}" update -q
 DEBIAN_FRONTEND=noninteractive apt-get "${APT[@]}" install -y -q --no-install-recommends \
-  ca-certificates curl bzip2 xz-utils gcc libc6-dev binutils make pkg-config
+  ca-certificates curl bzip2 xz-utils gcc libc6-dev musl-tools linux-libc-dev binutils make pkg-config
 
 fetch() { # URL SHA256 FILE
   curl -fsSL --retry 5 --retry-all-errors -o "$3" "$1"
@@ -44,7 +47,10 @@ fetch() { # URL SHA256 FILE
 }
 
 # The same paths and times every run, so two builds give the same bytes.
-FLAGS="-O2 -ffile-prefix-map=/work=. -fdebug-prefix-map=/work=."
+# musl-gcc searches musl's headers only; the kernel's (linux/, asm/), which
+# libusb needs and which no libc owns, come after them.
+export CC=musl-gcc
+FLAGS="-O2 -ffile-prefix-map=/work=. -fdebug-prefix-map=/work=. -idirafter /usr/include -idirafter /usr/include/x86_64-linux-gnu"
 P=/work/prefix
 LIBUSB=$(basename "$LIBUSB_URL")
 DFU=$(basename "$DFU_UTIL_URL")
@@ -73,9 +79,12 @@ fi
 /work/dfu-util --version | sed -n 1p
 
 # The licences of what the binary holds: each must exist.
-mkdir -p /work/licenses/dfu-util /work/licenses/libusb
+mkdir -p /work/licenses/dfu-util /work/licenses/libusb /work/licenses/musl
 cp /work/dfu/COPYING /work/licenses/dfu-util/COPYING
 cp /work/libusb/COPYING /work/licenses/libusb/COPYING
+# musl's copyright file, as Ubuntu's package installs it: it holds musl's
+# COPYRIGHT (MIT).
+cp /usr/share/doc/musl/copyright /work/licenses/musl/copyright
 (cd /work && tar --format=posix --pax-option=delete=atime,delete=ctime --sort=name \
   --mtime='@0' --owner=0 --group=0 --numeric-owner -cf dfu-util-licenses.tar licenses)
 

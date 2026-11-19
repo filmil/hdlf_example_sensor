@@ -156,15 +156,16 @@ On Linux the user needs access to the device, for example through the
 udev rule in dfu-util's `doc/60-dfuse.rules`.
 
 `dfu-util` comes from `//third_party/dfu_util`: dfu-util 0.11, statically
-linked with libusb 1.0.30 (`//third_party/libusb`), so the host needs
-nothing installed. `bazel run //tools/dfu_util -- --out=DIR` builds it
+linked with libusb 1.0.30 (`//third_party/libusb`) and the musl C library
+(`//third_party/musl`), so the host needs nothing installed. musl, not
+glibc, so that no LGPL C library is linked into the binary. `bazel run //tools/dfu_util -- --out=DIR` builds it
 from pinned sources in a pinned Ubuntu container with podman; two builds
 give the same bytes, and the tool fails unless the binary has the sha256
 `MODULE.bazel` pins. The binary is mirrored as the release
 `mirror-dfu-util-0.11`, which the operator uploads with
 `bazel run //tools/mirror -- --dry_run=false --built_dir=DIR`.
-dfu-util is GPL-2.0-or-later and libusb LGPL-2.1-or-later; their licences
-are in `//third_party` and in the release. Neither is part of the
+dfu-util is GPL-2.0-or-later, libusb LGPL-2.1-or-later and musl MIT; their
+licences are in `//third_party` and in the release. Neither is part of the
 firmware.
 
 ## The HDC2080 driver

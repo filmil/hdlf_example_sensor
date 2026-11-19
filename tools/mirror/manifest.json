@@ -712,12 +712,12 @@
     },
     {
       "tag": "mirror-dfu-util-0.11",
-      "title": "dfu-util 0.11 with libusb 1.0.30, static, for //fw:flash",
-      "notes": "dfu-util 0.11, statically linked with libusb 1.0.30, for x86_64 Linux: the flash tool of //fw:flash (https://github.com/filmil/hdlf_example_sensor/issues/14, step 5). Built by tools/dfu_util (bazel run //tools/dfu_util) in docker.io/library/ubuntu:26.04 pinned by digest, every package from snapshot.ubuntu.com 20261117T000000Z; two builds give the same bytes. Sources, as downloaded and assets of this release: dfu-util from https://dfu-util.sourceforge.net/releases/dfu-util-0.11.tar.gz (sha256 b4b53ba21a82ef7e3d4c47df2952adf5fa494f499b6b0b57c58c5d04ae8ff19e), libusb from https://github.com/libusb/libusb/releases/download/v1.0.30/libusb-1.0.30.tar.bz2 (sha256 fea36f34f9156400209595e300840767ab1a385ede1dc7ee893015aea9c6dbaf). Licences: dfu-util GPL-2.0-or-later, libusb LGPL-2.1-or-later; dfu-util-licenses.tar holds both texts.",
+      "title": "dfu-util 0.11 with libusb 1.0.30 and musl, static, for //fw:flash",
+      "notes": "dfu-util 0.11, statically linked with libusb 1.0.30 and musl, for x86_64 Linux: the flash tool of //fw:flash (https://github.com/filmil/hdlf_example_sensor/issues/14, step 5). Built by tools/dfu_util (bazel run //tools/dfu_util) in docker.io/library/ubuntu:26.04 pinned by digest, every package from snapshot.ubuntu.com 20261117T000000Z; two builds give the same bytes. Sources, as downloaded and assets of this release: dfu-util from https://dfu-util.sourceforge.net/releases/dfu-util-0.11.tar.gz (sha256 b4b53ba21a82ef7e3d4c47df2952adf5fa494f499b6b0b57c58c5d04ae8ff19e), libusb from https://github.com/libusb/libusb/releases/download/v1.0.30/libusb-1.0.30.tar.bz2 (sha256 fea36f34f9156400209595e300840767ab1a385ede1dc7ee893015aea9c6dbaf). musl, not glibc, so that no LGPL C library is linked into the binary; musl comes from the musl-tools package of the same snapshot. Licences: dfu-util GPL-2.0-or-later, libusb LGPL-2.1-or-later, musl MIT; dfu-util-licenses.tar holds the three texts.",
       "assets": [
         {
           "name": "dfu-util",
-          "sha256": "5011353cbf7c6c21d5400a2956756c862a6581659253b958478c0003bdb21804",
+          "sha256": "95fdbb4cdaefe1762bd88f5b97ff5da1b8cf997a9bcf65c4cdf15658dd917106",
           "built": {
             "source": "https://dfu-util.sourceforge.net/releases/dfu-util-0.11.tar.gz",
             "source_sha256": "b4b53ba21a82ef7e3d4c47df2952adf5fa494f499b6b0b57c58c5d04ae8ff19e",
@@ -726,7 +726,7 @@
         },
         {
           "name": "dfu-util-licenses.tar",
-          "sha256": "9175386b10b117b598480bf328070e3f9f6ba8cfe6387f4d1e62cbf628099e32",
+          "sha256": "02feea0341615fcb1a5415153c6d300a4e4bec6b7a3e96abe1a5707c3e6368b8",
           "built": {
             "source": "https://dfu-util.sourceforge.net/releases/dfu-util-0.11.tar.gz",
             "source_sha256": "b4b53ba21a82ef7e3d4c47df2952adf5fa494f499b6b0b57c58c5d04ae8ff19e",

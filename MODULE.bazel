@@ -151,6 +151,6 @@ http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_
 http_file(
     name = "dfu_util",
     executable = True,
-    sha256 = "5011353cbf7c6c21d5400a2956756c862a6581659253b958478c0003bdb21804",
+    sha256 = "95fdbb4cdaefe1762bd88f5b97ff5da1b8cf997a9bcf65c4cdf15658dd917106",
     urls = ["https://github.com/filmil/hdlf_example_sensor/releases/download/mirror-dfu-util-0.11/dfu-util"],
 )

@@ -56,6 +56,9 @@ func TestInputsArePinned(t *testing.T) {
 		`Acquire::https::CaInfo=/host-ca.crt`,
 		`--disable-udev`,
 		`LDFLAGS="-static"`,
+		`export CC=musl-gcc`,
+		`musl-tools`,
+		`/usr/share/doc/musl/copyright`,
 		`dfu-util is not static`,
 	} {
 		if !strings.Contains(BuildScript, want) {
@@ -193,7 +196,7 @@ func TestMatchesModuleAndManifest(t *testing.T) {
 				}
 			}
 		}
-		for _, want := range []string{LibUSB.URL, LibUSB.SHA256, DfuUtil.URL, DfuUtil.SHA256, AptSnapshot, "GPL-2.0-or-later", "LGPL-2.1-or-later"} {
+		for _, want := range []string{LibUSB.URL, LibUSB.SHA256, DfuUtil.URL, DfuUtil.SHA256, AptSnapshot, "GPL-2.0-or-later", "LGPL-2.1-or-later", "musl MIT"} {
 			if !strings.Contains(r.Notes, want) {
 				t.Errorf("manifest: the notes of %s do not name %s", r.Tag, want)
 			}

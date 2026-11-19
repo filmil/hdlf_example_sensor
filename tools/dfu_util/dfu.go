@@ -52,10 +52,10 @@ var DfuUtil = Input{
 
 // BinarySHA256 is the static dfu-util's sha256: what MODULE.bazel pins and
 // tools/mirror/manifest.json mirrors. The tool fails on any other.
-const BinarySHA256 = "5011353cbf7c6c21d5400a2956756c862a6581659253b958478c0003bdb21804"
+const BinarySHA256 = "95fdbb4cdaefe1762bd88f5b97ff5da1b8cf997a9bcf65c4cdf15658dd917106"
 
 // LicensesSHA256 is dfu-util-licenses.tar's sha256, as the manifest pins it.
-const LicensesSHA256 = "9175386b10b117b598480bf328070e3f9f6ba8cfe6387f4d1e62cbf628099e32"
+const LicensesSHA256 = "02feea0341615fcb1a5415153c6d300a4e4bec6b7a3e96abe1a5707c3e6368b8"
 
 // Outputs are the files build.sh leaves in --out: the binary, the two
 // sources under their upstream names, the licences and SHA256SUMS.
