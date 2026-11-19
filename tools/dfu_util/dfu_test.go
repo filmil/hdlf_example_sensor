@@ -329,32 +329,107 @@ func TestFindCABundle(t *testing.T) {
 
 // --dry_run prints a command a shell runs as it is: quoted arguments, and
 // the script as a here-document on standard input.
-// --dry_run prints a command a shell runs as it is: it creates --out, and
-// passes quoted arguments and the script as a here-document.
+// --dry_run prints a script a shell runs as it is, and printing it changes
+// nothing: the script makes, mounts and removes its own CA copy.
 func TestDryRun(t *testing.T) {
-	out := DryRun("/tmp/my out", Command("/tmp/my out", "/tmp/ca/ca.crt", 2))
-	first, rest, _ := strings.Cut(out, "\n")
-	if !strings.HasPrefix(first, "mkdir -p '/tmp/my out' && podman run") {
-		t.Errorf("no mkdir of --out first: %s", first)
-	}
-	if !strings.Contains(first, "-v '/tmp/my out:/out:Z'") {
-		t.Errorf("the path with a space is not quoted: %s", first)
+	out := DryRun("/tmp/my out", "/etc/ssl/certs/ca-certificates.crt", 2)
+	lines := strings.Split(out, "\n")
+	first := lines[0]
+	for _, want := range []string{
+		`CA=$(mktemp -d) && cp /etc/ssl/certs/ca-certificates.crt "$CA/ca.crt" && `,
+		`mkdir -p '/tmp/my out' && podman run`,
+		`-v '/tmp/my out:/out:Z'`,
+		`-v "$CA"/ca.crt:/host-ca.crt:ro,Z`,
+	} {
+		if !strings.Contains(first, want) {
+			t.Errorf("the first line lacks %q:\n%s", want, first)
+		}
 	}
 	if !strings.HasSuffix(first, "bash -s <<'BUILD_SH'") {
 		t.Errorf("no here-document: %s", first)
 	}
-	if rest != strings.TrimSuffix(BuildScript, "\n")+"\nBUILD_SH\n" {
+	if !strings.HasSuffix(out, "\nBUILD_SH\nrm -rf \"$CA\"\n") {
+		t.Errorf("the copy is not removed after: ...%s", out[len(out)-40:])
+	}
+	if !strings.Contains(out, strings.TrimSuffix(BuildScript, "\n")+"\nBUILD_SH\n") {
 		t.Error("the here-document is not the script")
 	}
 	if strings.Contains(BuildScript, "\nBUILD_SH\n") {
 		t.Error("the script contains the here-document's end marker")
 	}
-	for _, host := range CABundles {
-		if strings.Contains(first, host+":") {
-			t.Errorf("the command mounts the host's CA bundle %s", host)
-		}
+	if strings.Contains(first, "/etc/ssl/certs/ca-certificates.crt:") {
+		t.Error("the command mounts the host's CA bundle")
 	}
 	if got := Quote([]string{"a", "it's", "x y"}); got != `a 'it'\''s' 'x y'` {
 		t.Errorf("Quote: %s", got)
+	}
+}
+
+func TestParseArgs(t *testing.T) {
+	o, err := ParseArgs([]string{"--out=x", "--jobs=3", "--dry_run"}, "/w")
+	if err != nil || o != (Options{Out: "/w/x", Jobs: 3, Dry: true}) {
+		t.Errorf("ParseArgs = %+v, %v", o, err)
+	}
+	o, err = ParseArgs([]string{"--out=/o"}, "")
+	if err != nil || o != (Options{Out: "/o", Jobs: 4}) {
+		t.Errorf("defaults: %+v, %v", o, err)
+	}
+	for _, args := range [][]string{
+		{},                         // no --out
+		{"--out=/o", "extra"},      // a stray argument
+		{"--out=/o", "--jobs=0"},   // no jobs
+		{"--out=/o", "--bogus"},    // an unknown flag
+		{"--out=/a:b"},             // a ":" podman cannot mount
+	} {
+		if o, err := ParseArgs(args, "/w"); err == nil {
+			t.Errorf("ParseArgs(%q) = %+v, want an error", args, o)
+		}
+	}
+}
+
+func TestCheckMount(t *testing.T) {
+	if err := CheckMount("/tmp/dfu-util-1/ca.crt"); err != nil {
+		t.Error(err)
+	}
+	if err := CheckMount("/tmp/a:b/ca.crt"); err == nil {
+		t.Error("a path with a colon passed")
+	}
+}
+
+// SHA256SUMS must match line by line, and a wrong one empties --out too.
+func TestVerifyOutputChecksSHA256SUMS(t *testing.T) {
+	want := SHA256SUMS()
+	if strings.Count(want, "\n") != 4 || !strings.HasPrefix(want, BinarySHA256+"  dfu-util\n") {
+		t.Errorf("SHA256SUMS() = %q", want)
+	}
+	d := t.TempDir()
+	if err := os.WriteFile(filepath.Join(d, "SHA256SUMS"), []byte("wrong\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := VerifyOutput(d)
+	if err == nil || !strings.Contains(err.Error(), "SHA256SUMS is") {
+		t.Errorf("a wrong SHA256SUMS: %v", err)
+	}
+	if left, _ := os.ReadDir(d); len(left) != 0 {
+		t.Errorf("--out still holds %d files", len(left))
+	}
+}
+
+func TestCleanOut(t *testing.T) {
+	d := t.TempDir()
+	keep := filepath.Join(d, "not-an-output")
+	for _, name := range append(Outputs()[:2], "not-an-output") {
+		if err := os.WriteFile(filepath.Join(d, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := CleanOut(d); err != nil {
+		t.Errorf("CleanOut: %v", err)
+	}
+	if _, err := os.Stat(keep); err != nil {
+		t.Error("CleanOut removed a file it did not write")
+	}
+	if left, _ := os.ReadDir(d); len(left) != 1 {
+		t.Errorf("%d files left, want 1", len(left))
 	}
 }

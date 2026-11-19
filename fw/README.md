@@ -141,7 +141,8 @@ bazel run //fw:flash
 
 `//fw:flash` writes `fw.bin` over the STM32F042's ROM USB DFU
 bootloader. It is for the operator, at the board: CI never builds it
-(it is `manual`), and no agent runs it.
+(it is `manual`), and no agent runs it. It runs on x86_64 Linux only, the
+one platform its static dfu-util is built for.
 
 1. With the board unplugged, close JP1, the solder jumper that pulls
    BOOT0 high. Then plug the board in. It comes up as the STM32
@@ -164,9 +165,12 @@ give the same bytes, and the tool fails unless the binary has the sha256
 `MODULE.bazel` pins. The binary is mirrored as the release
 `mirror-dfu-util-0.11`, which the operator uploads with
 `bazel run //tools/mirror -- --dry_run=false --built_dir=DIR`.
-dfu-util is GPL-2.0-or-later, libusb LGPL-2.1-or-later and musl MIT; their
-licences are in `//third_party` and in the release. Neither is part of the
-firmware.
+dfu-util is GPL-2.0-or-later and libusb LGPL-2.1-or-later. musl is MIT,
+with some parts under BSD-2-Clause, BSD-3-Clause, ISC and other permissive
+terms, as its `LICENSE` lists. Their licences are in `//third_party`, and
+the release holds the source of all three, as dfu-util's GPL asks of a
+binary that links them. None of the three is part
+of the firmware.
 
 ## The HDC2080 driver
 

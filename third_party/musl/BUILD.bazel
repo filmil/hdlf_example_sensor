@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# musl (https://musl.libc.org), MIT. LICENSE is the copyright file of
+# musl (https://musl.libc.org): MIT, with some parts under BSD-2-Clause,
+# BSD-3-Clause, ISC and other permissive terms. LICENSE is the copyright file of
 # Ubuntu's musl package, from the pinned snapshot //tools/dfu_util builds
 # with; it holds musl's COPYRIGHT. musl's C library is linked statically
 # into the dfu-util of //third_party/dfu_util, and has no target of its own.

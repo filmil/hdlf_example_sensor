@@ -11,6 +11,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"io/fs"
@@ -181,33 +182,97 @@ func VerifyFile(p, want string) error {
 	return nil
 }
 
+// SHA256SUMS is what build.sh writes to SHA256SUMS when every output has
+// its pinned sha256.
+func SHA256SUMS() string {
+	return BinarySHA256 + "  dfu-util\n" +
+		LibUSB.SHA256 + "  " + filepath.Base(LibUSB.URL) + "\n" +
+		DfuUtil.SHA256 + "  " + filepath.Base(DfuUtil.URL) + "\n" +
+		LicensesSHA256 + "  dfu-util-licenses.tar\n"
+}
+
 // VerifyOutput checks what the build left in dir against the pins: the
-// binary, the licences and both sources. On any mismatch it removes every
-// output, so that a failed run leaves dir empty, and returns the error.
+// binary, the licences, both sources, and SHA256SUMS, line by line. On any
+// mismatch it empties dir (CleanOut) and returns every error.
 func VerifyOutput(dir string) error {
 	pins := map[string]string{
-		"dfu-util":                  BinarySHA256,
-		"dfu-util-licenses.tar":     LicensesSHA256,
-		filepath.Base(LibUSB.URL):   LibUSB.SHA256,
-		filepath.Base(DfuUtil.URL):  DfuUtil.SHA256,
+		"dfu-util":                 BinarySHA256,
+		"dfu-util-licenses.tar":    LicensesSHA256,
+		filepath.Base(LibUSB.URL):  LibUSB.SHA256,
+		filepath.Base(DfuUtil.URL): DfuUtil.SHA256,
 	}
 	var errs []error
 	for _, name := range Outputs() {
-		want, pinned := pins[name]
-		if !pinned {
-			continue
+		if want, pinned := pins[name]; pinned {
+			if err := VerifyFile(filepath.Join(dir, name), want); err != nil {
+				errs = append(errs, err)
+			}
 		}
-		if err := VerifyFile(filepath.Join(dir, name), want); err != nil {
-			errs = append(errs, err)
-		}
+	}
+	sums, err := os.ReadFile(filepath.Join(dir, "SHA256SUMS"))
+	switch {
+	case err != nil:
+		errs = append(errs, err)
+	case string(sums) != SHA256SUMS():
+		errs = append(errs, fmt.Errorf("SHA256SUMS is\n%s\nwant\n%s", sums, SHA256SUMS()))
 	}
 	if len(errs) == 0 {
 		return nil
 	}
-	for _, name := range Outputs() {
-		os.Remove(filepath.Join(dir, name))
+	if err := CleanOut(dir); err != nil {
+		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
+}
+
+// CleanOut removes every output build.sh writes from dir, so that a failed
+// run leaves it as it found it: empty. It reports what it could not remove.
+func CleanOut(dir string) error {
+	var errs []error
+	for _, name := range Outputs() {
+		if err := os.Remove(filepath.Join(dir, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// Options are the command's flags.
+type Options struct {
+	Out  string // absolute, from ResolveOut
+	Jobs int
+	Dry  bool
+}
+
+// ParseArgs reads the command's flags; wd is the directory bazel run was
+// started in, for a relative --out. Anything else on the line is an error.
+func ParseArgs(args []string, wd string) (Options, error) {
+	fs := flag.NewFlagSet("dfu_util", flag.ContinueOnError)
+	out := fs.String("out", "", "a missing or empty directory for dfu-util, its sources, its licences and SHA256SUMS (required)")
+	jobs := fs.Int("jobs", 4, "parallel compile jobs, and the container's CPUs")
+	dry := fs.Bool("dry_run", false, "print the command, with the script as a here-document; run nothing")
+	if err := fs.Parse(args); err != nil {
+		return Options{}, err
+	}
+	if fs.NArg() > 0 {
+		return Options{}, fmt.Errorf("unexpected arguments %q; give --out, --jobs or --dry_run", fs.Args())
+	}
+	if *jobs < 1 {
+		return Options{}, fmt.Errorf("--jobs must be 1 or more")
+	}
+	abs, err := ResolveOut(*out, wd)
+	if err != nil {
+		return Options{}, err
+	}
+	return Options{Out: abs, Jobs: *jobs, Dry: *dry}, nil
+}
+
+// CheckMount fails if p cannot be a podman -v source: -v splits on ":".
+func CheckMount(p string) error {
+	if strings.Contains(p, ":") {
+		return fmt.Errorf("%q has a \":\", which podman's -v cannot take", p)
+	}
+	return nil
 }
 
 var plainArg = regexp.MustCompile(`^[\w@%+=:,./-]+$`)
@@ -225,10 +290,18 @@ func Quote(argv []string) string {
 	return strings.Join(out, " ")
 }
 
-// DryRun returns what --dry_run prints for out: a command that creates out
-// and runs podman with the script as a here-document on its standard input,
-// which a shell runs as it is. argv must mount a copy of the CA bundle,
-// never the host's file (CopyCABundle).
-func DryRun(out string, argv []string) string {
-	return Quote([]string{"mkdir", "-p", out}) + " && " + Quote(argv) + " <<'BUILD_SH'\n" + strings.TrimSuffix(BuildScript, "\n") + "\nBUILD_SH\n"
+// caToken stands for the CA copy's directory in DryRun's command; the
+// printed script makes the copy itself, in a mktemp directory.
+const caToken = "@CA@"
+
+// DryRun returns what --dry_run prints: a script that copies the CA bundle
+// bundle into a new temporary directory, creates out, runs podman with
+// build.sh as a here-document, and removes the copy. Printing it changes
+// nothing on the host.
+func DryRun(out, bundle string, jobs int) string {
+	cmd := Quote(Command(out, caToken+"/ca.crt", jobs))
+	cmd = strings.Replace(cmd, caToken, `"$CA"`, 1)
+	return `CA=$(mktemp -d) && cp ` + Quote([]string{bundle}) + ` "$CA/ca.crt" && ` +
+		Quote([]string{"mkdir", "-p", out}) + " && " + cmd + " <<'BUILD_SH'\n" +
+		strings.TrimSuffix(BuildScript, "\n") + "\nBUILD_SH\n" + `rm -rf "$CA"` + "\n"
 }

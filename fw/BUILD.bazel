@@ -237,10 +237,7 @@ rust_binary(
         "@platforms//cpu:x86_64",
         "@platforms//os:linux",
     ],
-    deps = [
-        ":flash_lib",
-        "@rules_rust//rust/runfiles",
-    ],
+    deps = [":flash_lib"],
 )
 
 # //fw:flash's arguments, which CI builds and tests although //fw:flash
@@ -248,6 +245,7 @@ rust_binary(
 rust_library(
     name = "flash_lib",
     srcs = ["flash/lib.rs"],
+    deps = ["@rules_rust//rust/runfiles"],
 )
 
 rust_test(

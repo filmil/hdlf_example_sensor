@@ -16,7 +16,7 @@
 package main
 
 import (
-	"flag"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,39 +26,24 @@ import (
 )
 
 func run() error {
-	out := flag.String("out", "", "a missing or empty directory for dfu-util, its sources, its licences and SHA256SUMS (required)")
-	jobs := flag.Int("jobs", 4, "parallel compile jobs, and the container's CPUs")
-	dry := flag.Bool("dry_run", false, "print the command, with the script as a here-document; run nothing")
-	flag.Parse()
-	if flag.NArg() > 0 {
-		return fmt.Errorf("unexpected arguments %q; give --out, --jobs or --dry_run", flag.Args())
-	}
-	if *jobs < 1 {
-		return fmt.Errorf("--jobs must be 1 or more")
-	}
-	abs, err := dfuutil.ResolveOut(*out, os.Getenv("BUILD_WORKING_DIRECTORY"))
+	o, err := dfuutil.ParseArgs(os.Args[1:], os.Getenv("BUILD_WORKING_DIRECTORY"))
 	if err != nil {
 		return err
 	}
-	if *dry {
-		// The printed command mounts a copy of the CA bundle, made now and
-		// left for it, never the host's file, which :Z would relabel.
-		tmp, err := os.MkdirTemp("", "dfu-util-ca-")
-		if err != nil {
-			return err
-		}
-		ca, err := dfuutil.CopyCABundle(tmp)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("# The command mounts %s, a copy of the host's CA bundle; delete %s after.\n", ca, tmp)
-		fmt.Print(dfuutil.DryRun(abs, dfuutil.Command(abs, ca, *jobs)))
-		return nil
-	}
-	if err := dfuutil.CheckOut(abs); err != nil {
+	bundle, err := dfuutil.FindCABundle()
+	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(abs, 0o755); err != nil {
+	if o.Dry {
+		// A script that makes, mounts and removes its own CA copy: printing
+		// it changes nothing here.
+		fmt.Print(dfuutil.DryRun(o.Out, bundle, o.Jobs))
+		return nil
+	}
+	if err := dfuutil.CheckOut(o.Out); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(o.Out, 0o755); err != nil {
 		return err
 	}
 	// The container mounts a copy of the CA bundle, removed after the run;
@@ -72,18 +57,22 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	cmd := dfuutil.Command(abs, ca, *jobs)
+	if err := dfuutil.CheckMount(ca); err != nil {
+		return err
+	}
+	cmd := dfuutil.Command(o.Out, ca, o.Jobs)
 	c := exec.Command(cmd[0], cmd[1:]...)
 	c.Stdin = strings.NewReader(dfuutil.BuildScript)
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
 	if err := c.Run(); err != nil {
-		return err
+		// build.sh copies to /out last; an interrupted copy may leave part.
+		return errors.Join(err, dfuutil.CleanOut(o.Out))
 	}
 	// On a mismatch this empties --out again: nothing unverified is left.
-	if err := dfuutil.VerifyOutput(abs); err != nil {
+	if err := dfuutil.VerifyOutput(o.Out); err != nil {
 		return err
 	}
-	fmt.Printf("ok %s: dfu-util has sha256 %s, as pinned, and so do its sources and licences\n", abs, dfuutil.BinarySHA256)
+	fmt.Printf("ok %s: dfu-util has sha256 %s, as pinned, and so do its sources and licences\n", o.Out, dfuutil.BinarySHA256)
 	return nil
 }
 

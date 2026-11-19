@@ -47,15 +47,20 @@ fetch() { # URL SHA256 FILE
 }
 
 # The same paths and times every run, so two builds give the same bytes.
-# musl-gcc searches musl's headers only; the kernel's (linux/, asm/), which
-# libusb needs and which no libc owns, come after them.
+# musl-gcc searches musl's headers only. libusb also needs the kernel's
+# (linux/, asm/, asm-generic/), which no libc owns: a directory with only
+# those comes after musl's, so no glibc header can be picked up.
 export CC=musl-gcc
-FLAGS="-O2 -ffile-prefix-map=/work=. -fdebug-prefix-map=/work=. -idirafter /usr/include -idirafter /usr/include/x86_64-linux-gnu"
+mkdir -p /work/kernel-include
+ln -s /usr/include/linux /usr/include/asm-generic /work/kernel-include/
+ln -s /usr/include/x86_64-linux-gnu/asm /work/kernel-include/asm
+FLAGS="-O2 -ffile-prefix-map=/work=. -fdebug-prefix-map=/work=. -idirafter /work/kernel-include"
 P=/work/prefix
 LIBUSB=$(basename "$LIBUSB_URL")
 DFU=$(basename "$DFU_UTIL_URL")
 
-# libusb, static, without udev: dfu-util lists devices itself.
+# libusb, static, without udev: libusb then finds devices through sysfs and
+# netlink itself, so the binary needs no libudev.
 fetch "$LIBUSB_URL" "$LIBUSB_SHA256" "/work/$LIBUSB"
 mkdir -p /work/libusb && tar -xjf "/work/$LIBUSB" -C /work/libusb --strip-components=1
 (cd /work/libusb && CFLAGS="$FLAGS" ./configure --prefix=$P --enable-static --disable-shared \
