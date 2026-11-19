@@ -108,29 +108,34 @@ Every register, bit and formula comes from TI's datasheet, SNAS678C (July
 
 - **Driver:**
   - `check_id` reads the manufacturer and device IDs (0x5449, 0x07D0);
-  - `reset` sets SOFT_RES;
+  - `reset` sets SOFT_RES; the datasheet gives no settle time, so the
+    firmware waits the 3 ms it gives for power-up;
   - `enable_drdy_pin` makes the DRDY pin (PA0) go high when a measurement
-    completes;
+    completes; it stays high until `data_ready` reads DRDY_STATUS;
   - `trigger` starts one 14-bit humidity and temperature measurement;
   - `data_ready` reads DRDY_STATUS;
   - `read` reads all four result bytes in one transfer, LSB first, as the
     datasheet requires.
-- **Conversions,** in integer fixed point (the Cortex-M0 has no FPU),
-  rounded to the nearest unit:
+- **Conversions,** in integer fixed point (the Cortex-M0 has no FPU), each
+  the exact value rounded once to the nearest unit:
   - temperature in hundredths of a degree, from Equation 2, with the
-    datasheet's supply correction of 0.08 °C/V above 1.8 V; at the board's
-    3.3 V that adds 0.12 °C;
+    datasheet's supply correction of 0.08 °C/V above 1.8 V (none below, as
+    the datasheet says); at the board's 3.3 V that adds 0.12 °C;
   - humidity in tenths of a percent, from Equation 3.
 - **The line:** `t=23.41 rh=45.2`, the format the plan in #14 gives. It is
   formatted by hand into a `heapless::Vec`, without `core::fmt`, to keep
-  flash small.
+  flash small. A reading gives at most 17 bytes; the buffer holds any
+  input, so nothing is cut.
 
 `:hdc2080_test` runs on the host:
-- the conversions against Equations 1 to 3 in floating point, across the
-  whole raw range and at its edges;
-- the line, from -40.50 °C to 124.50 °C;
-- every I2C transaction the driver makes, on a fake bus that records them
-  and answers from a script, and bus errors passing through.
+- the conversions against Equations 1 to 3 in floating point, for every
+  raw value, at supplies from 1.62 V to 3.6 V;
+- the line for every temperature the board's sensor can give, and for
+  the extremes of its input types;
+- every I2C operation the driver makes, in order, on a fake bus that
+  records them, answers from a script and checks every answer was used;
+  and bus errors from each call, including the second write of
+  `enable_drdy_pin`.
 
 ## Where the downloads come from
 
