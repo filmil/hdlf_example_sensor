@@ -10,9 +10,14 @@ package(default_visibility = ["//visibility:public"])
 
 licenses(["restricted"])
 
-# Manual, like //fw:flash: //... does not fetch the binary.
+# Manual, like //fw:flash: //... does not fetch the binary. The binary is
+# x86_64 Linux only.
 alias(
     name = "dfu_util",
     actual = "@dfu_util//file",
     tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
 )
