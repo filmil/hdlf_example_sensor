@@ -1,8 +1,53 @@
 // SPDX-License-Identifier: Apache-2.0
 //! The firmware fits the STM32F042F6: 32 KB of flash, and 6 KB of RAM with
-//! at least 1 KB left for the stack. The margin goes to the test log. The
-//! known-bad case: the same firmware on a chip one byte too small must
-//! fail, and on one just big enough, pass. fw.bin is the ELF's image.
+//! at least 1 KB left for the stack. The margin goes to the test log
+//! (--nocapture). The known-bad case: the same firmware on a chip one byte
+//! too small must fail, and on one just big enough, pass. fw.bin is the
+//! ELF's image.
+//!
+//! Two more checks keep the margin visible before it is gone:
+//! - The use is recorded here, exactly. A change that grows or shrinks
+//!   the firmware fails until it updates RECORDED, so its diff shows by
+//!   how much. Two builds of the same sources give the same bytes
+//!   (fw_determinism_test); a toolchain or crate update that changes the
+//!   size updates RECORDED too, which shows what the update costs. Two
+//!   PRs that both change the size both edit RECORDED's line, so git
+//!   makes the second rebase, and its CI then checks the combination.
+//! - Headroom: flash use at most FLASH_MAX_PERCENT (90 %) of the chip,
+//!   and at least STACK_MIN_FREE (2 KB) of RAM left free for the stack.
+//!   The last 10 % of flash (about 3.2 KB) is a reserve: the check fails
+//!   when a change would spend it, so spending it is a choice, made by
+//!   raising FLASH_MAX_PERCENT in the same PR, with the reason, where a
+//!   reviewer sees it. Then a fix can still land without cutting a
+//!   feature first; at 100 % even a one-line fix needs a cut. The hard
+//!   limits of fits_the_chip stay: they are the chip's, whatever the cap.
+//!   The stack: nothing here measures how deep it grows, only how much
+//!   RAM is left for it. 2 KB is twice the hard minimum, slack for what
+//!   an estimate would miss (interrupt frames over the executor's
+//!   deepest poll).
+
+/// The use when it was last recorded, in bytes.
+const RECORDED: elf::Usage = elf::Usage { flash: 24112, ram: 2228 };
+
+/// Flash use at most this percentage of the chip.
+const FLASH_MAX_PERCENT: u64 = 90;
+
+/// RAM left free for the stack: at least this many bytes.
+const STACK_MIN_FREE: u64 = 2 * 1024;
+
+/// Checks u against the headroom on m: a line with the margins, or an
+/// error naming what is over.
+fn headroom(u: &elf::Usage, m: &elf::Memory) -> Result<String, String> {
+    let flash_max = m.flash_size as u64 * FLASH_MAX_PERCENT / 100;
+    if u.flash > flash_max {
+        return Err(format!("flash {} bytes, over {} % of {} ({} bytes)", u.flash, FLASH_MAX_PERCENT, m.flash_size, flash_max));
+    }
+    let free = (m.ram_size as u64).saturating_sub(u.ram);
+    if free < STACK_MIN_FREE {
+        return Err(format!("RAM {} bytes leaves {} for the stack, under {}", u.ram, free, STACK_MIN_FREE));
+    }
+    Ok(format!("headroom: flash {} bytes under {} %, stack {} bytes over {}", flash_max - u.flash, FLASH_MAX_PERCENT, free - STACK_MIN_FREE, STACK_MIN_FREE))
+}
 
 fn read(var: &str) -> Vec<u8> {
     let path = std::env::var(var).unwrap_or_else(|_| panic!("{}", var));
@@ -32,6 +77,49 @@ fn fits_the_chip() {
         Err(e) => panic!("{}", e),
     }
     assert!(u.flash > 0, "no flash used");
+}
+
+#[test]
+fn the_use_is_the_recorded_one() {
+    let (d, e) = firmware();
+    let u = elf::usage(&d, &e, &elf::STM32F042F6).expect("usage");
+    let delta = |now: u64, then: u64| now as i64 - then as i64;
+    assert_eq!(
+        u,
+        RECORDED,
+        "the firmware's size changed: flash {:+} bytes, RAM {:+} bytes. Record it: \
+         RECORDED = elf::Usage {{ flash: {}, ram: {} }} in fw/test/budget_test.rs",
+        delta(u.flash, RECORDED.flash),
+        delta(u.ram, RECORDED.ram),
+        u.flash,
+        u.ram,
+    );
+}
+
+#[test]
+fn leaves_headroom() {
+    let (d, e) = firmware();
+    let m = &elf::STM32F042F6;
+    let u = elf::usage(&d, &e, m).expect("usage");
+    match headroom(&u, m) {
+        Ok(line) => println!("{}", line),
+        Err(e) => panic!("{}", e),
+    }
+}
+
+/// The headroom check at its edges, on made-up use: flash exactly at the
+/// cap passes and one byte over fails; RAM leaving exactly STACK_MIN_FREE
+/// passes and one byte less fails; RAM over the chip fails.
+#[test]
+fn headroom_at_its_edges() {
+    let m = &elf::STM32F042F6;
+    let flash_max = m.flash_size as u64 * FLASH_MAX_PERCENT / 100;
+    let ram_max = m.ram_size as u64 - STACK_MIN_FREE;
+    let at = |flash, ram| headroom(&elf::Usage { flash, ram }, m);
+    assert!(at(flash_max, ram_max).is_ok(), "{:?}", at(flash_max, ram_max));
+    assert!(at(flash_max + 1, ram_max).is_err());
+    assert!(at(flash_max, ram_max + 1).is_err());
+    assert!(at(flash_max, m.ram_size as u64 + 1).is_err());
 }
 
 #[test]
