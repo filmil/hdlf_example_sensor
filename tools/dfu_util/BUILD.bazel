@@ -22,6 +22,8 @@ go_test(
     srcs = ["dfu_test.go"],
     data = [
         "//:MODULE.bazel",
+        "//third_party/dfu_util:README.md",
+        "//third_party/dfu_util:dfu-util-0.11.tar.gz.torrent",
         "//tools/mirror:manifest.json",
     ],
     embed = [":dfu_util_lib"],

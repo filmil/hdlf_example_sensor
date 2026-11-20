@@ -47,15 +47,20 @@ func TestParseRejects(t *testing.T) {
 	good := `{"repo": "o/r", "releases": [{"tag": "t", "title": "T", "notes": "n", "assets": [ASSET]}]}`
 	sha := strings.Repeat("a", 64)
 	for name, asset := range map[string]string{
-		"no source":     `{"name": "a", "sha256": "` + sha + `"}`,
-		"both sources":  `{"name": "a", "sha256": "` + sha + `", "url": "https://x/a", "built": {"source": "https://x/s", "source_sha256": "` + sha + `", "script": "s.sh"}}`,
-		"short sha":     `{"name": "a", "sha256": "abc", "url": "https://x/a"}`,
-		"upper sha":     `{"name": "a", "sha256": "` + strings.Repeat("A", 64) + `", "url": "https://x/a"}`,
-		"slash in name": `{"name": "d/a", "sha256": "` + sha + `", "url": "https://x/a"}`,
-		"no script":     `{"name": "a", "sha256": "` + sha + `", "built": {"source": "https://x/s", "source_sha256": "` + sha + `"}}`,
-		"unknown field": `{"name": "a", "sha256": "` + sha + `", "url": "https://x/a", "sha1": "x"}`,
-		"dot dot":       `{"name": "..", "sha256": "` + sha + `", "url": "https://x/a"}`,
-		"dot":           `{"name": ".", "sha256": "` + sha + `", "url": "https://x/a"}`,
+		"no source":                  `{"name": "a", "sha256": "` + sha + `"}`,
+		"both sources":               `{"name": "a", "sha256": "` + sha + `", "url": "https://x/a", "built": {"source": "https://x/s", "source_sha256": "` + sha + `", "script": "s.sh"}}`,
+		"short sha":                  `{"name": "a", "sha256": "abc", "url": "https://x/a"}`,
+		"upper sha":                  `{"name": "a", "sha256": "` + strings.Repeat("A", 64) + `", "url": "https://x/a"}`,
+		"slash in name":              `{"name": "d/a", "sha256": "` + sha + `", "url": "https://x/a"}`,
+		"no script":                  `{"name": "a", "sha256": "` + sha + `", "built": {"source": "https://x/s", "source_sha256": "` + sha + `"}}`,
+		"unknown field":              `{"name": "a", "sha256": "` + sha + `", "url": "https://x/a", "sha1": "x"}`,
+		"dot dot":                    `{"name": "..", "sha256": "` + sha + `", "url": "https://x/a"}`,
+		"dot":                        `{"name": ".", "sha256": "` + sha + `", "url": "https://x/a"}`,
+		"empty fallback":             `{"name": "a", "sha256": "` + sha + `", "url": "https://x/a", "fallback_urls": [""]}`,
+		"built with fallback_urls":   `{"name": "a", "sha256": "` + sha + `", "fallback_urls": ["https://y/s"], "built": {"source": "https://x/s", "source_sha256": "` + sha + `", "script": "s.sh"}}`,
+		"source without a file name": `{"name": "a", "sha256": "` + sha + `", "built": {"source": "https://x/", "source_sha256": "` + sha + `", "script": "s.sh"}}`,
+		"source ends in a slash":     `{"name": "a", "sha256": "` + sha + `", "built": {"source": "https://x/dir/", "source_sha256": "` + sha + `", "script": "s.sh"}}`,
+		"empty source fallback":      `{"name": "a", "sha256": "` + sha + `", "built": {"source": "https://x/s", "source_fallback_urls": [""], "source_sha256": "` + sha + `", "script": "s.sh"}}`,
 	} {
 		if _, err := Parse([]byte(strings.Replace(good, "ASSET", asset, 1))); err == nil {
 			t.Errorf("%s: parsed", name)
@@ -144,6 +149,172 @@ func TestCheck(t *testing.T) {
 				t.Errorf("%s: %v\nwant %q in it", name, err, w)
 			}
 		}
+	}
+}
+
+// An upstream file in --built_dir is used instead of its URL, which may
+// refuse us (SourceForge answers this tool 403); a fallback URL is tried
+// when a download fails. The sha256 is checked either way.
+func TestCheckLocalAndFallback(t *testing.T) {
+	var requests []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.URL.Path)
+		switch r.URL.Path {
+		case "/mirror/lib.tar.gz":
+			w.Write([]byte("library"))
+		case "/mirror/app.tar":
+			w.Write([]byte("appimage"))
+		default:
+			http.Error(w, "no", http.StatusForbidden)
+		}
+	}))
+	defer srv.Close()
+	release := func(fallbacks bool) Release {
+		lib := Asset{Name: "lib.tar.gz", SHA256: sum("library"), URL: srv.URL + "/sf/lib.tar.gz"}
+		app := Asset{Name: "app", SHA256: sum("prebuilt"), Built: &Built{Source: srv.URL + "/sf/app.tar", SourceSHA256: sum("appimage"), Script: "make.sh"}}
+		if fallbacks {
+			lib.FallbackURLs = []string{srv.URL + "/gone/lib.tar.gz", srv.URL + "/mirror/lib.tar.gz"}
+			app.Built.SourceFallbackURLs = []string{srv.URL + "/mirror/app.tar"}
+		}
+		return Release{Tag: "t", Title: "T", Assets: []Asset{lib, app}}
+	}
+	builtDir := func(files map[string]string) string {
+		d := t.TempDir()
+		for n, b := range files {
+			if err := os.WriteFile(filepath.Join(d, n), []byte(b), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return d
+	}
+	opts := func(dir string, log *bytes.Buffer) Options {
+		return Options{Client: srv.Client(), WorkDir: t.TempDir(), BuiltDir: dir, Log: log}
+	}
+
+	// The upstream URLs refuse us, but the build left both files: nothing
+	// is downloaded, and both assets are ready.
+	requests = nil
+	dir := builtDir(map[string]string{"lib.tar.gz": "library", "app.tar": "appimage", "app": "prebuilt"})
+	var log bytes.Buffer
+	ready, err := Check(release(false), opts(dir, &log))
+	if err != nil {
+		t.Fatalf("with local files: %v", err)
+	}
+	if ready["lib.tar.gz"] != filepath.Join(dir, "lib.tar.gz") || ready["app"] != filepath.Join(dir, "app") {
+		t.Errorf("ready %v, want both from %s", ready, dir)
+	}
+	if len(requests) != 0 {
+		t.Errorf("downloaded %v, want nothing", requests)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "app.tar")); err != nil {
+		t.Errorf("the source in --built_dir is gone: %v", err)
+	}
+	if !strings.Contains(log.String(), "source "+sum("appimage")+" (from "+filepath.Join(dir, "app.tar")+")") {
+		t.Errorf("log does not say the source came from %s:\n%s", dir, log.String())
+	}
+
+	// A local file with other bytes is an error, not a reason to download.
+	requests = nil
+	dir = builtDir(map[string]string{"lib.tar.gz": "tampered", "app.tar": "tampered", "app": "prebuilt"})
+	_, err = Check(release(true), opts(dir, &bytes.Buffer{}))
+	if err == nil {
+		t.Fatal("tampered local files: no error")
+	}
+	for _, w := range []string{"lib.tar.gz: " + filepath.Join(dir, "lib.tar.gz") + " has sha256 " + sum("tampered"), "app: source " + filepath.Join(dir, "app.tar") + " has sha256"} {
+		if !strings.Contains(err.Error(), w) {
+			t.Errorf("%v\nwant %q in it", err, w)
+		}
+	}
+	if len(requests) != 0 {
+		t.Errorf("downloaded %v, want nothing", requests)
+	}
+
+	// No local files: the URLs refuse, and the fallbacks serve, in order.
+	requests = nil
+	log.Reset()
+	ready, err = Check(release(true), opts(builtDir(map[string]string{"app": "prebuilt"}), &log))
+	if err != nil {
+		t.Fatalf("with fallbacks: %v", err)
+	}
+	if b, _ := os.ReadFile(ready["lib.tar.gz"]); string(b) != "library" {
+		t.Errorf("lib.tar.gz: got %q", b)
+	}
+	if want := "/sf/lib.tar.gz /gone/lib.tar.gz /mirror/lib.tar.gz /sf/app.tar /mirror/app.tar"; strings.Join(requests, " ") != want {
+		t.Errorf("requests %v, want %s", requests, want)
+	}
+	if !strings.Contains(log.String(), "(from "+srv.URL+"/mirror/lib.tar.gz)") {
+		t.Errorf("log does not name the fallback:\n%s", log.String())
+	}
+
+	// No local files and no fallbacks: both refusals are reported.
+	_, err = Check(release(false), opts("", &bytes.Buffer{}))
+	if err == nil || strings.Count(err.Error(), "403 Forbidden") != 2 {
+		t.Errorf("err %v, want two 403s", err)
+	}
+
+	// A directory where a file should be is an error, not a download.
+	requests = nil
+	dir = builtDir(map[string]string{"app": "prebuilt"})
+	if err := os.Mkdir(filepath.Join(dir, "lib.tar.gz"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Check(release(true), opts(dir, &bytes.Buffer{})); err == nil || !strings.Contains(err.Error(), "lib.tar.gz is not a regular file") {
+		t.Errorf("err %v, want lib.tar.gz is not a regular file", err)
+	}
+}
+
+// A download with other bytes moves on to the next URL, as a failed one
+// does; when none has the pinned bytes, every attempt is reported, and
+// no download is left behind.
+func TestCheckFallbackOnMismatch(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/interstitial/lib.tar.gz", "/interstitial/app.tar":
+			w.Write([]byte("<html>please wait</html>"))
+		case "/mirror/lib.tar.gz":
+			w.Write([]byte("library"))
+		case "/mirror/app.tar":
+			w.Write([]byte("appimage"))
+		default:
+			http.Error(w, "no", http.StatusForbidden)
+		}
+	}))
+	defer srv.Close()
+	release := func(last string) Release {
+		return Release{Tag: "t", Title: "T", Assets: []Asset{
+			{Name: "lib.tar.gz", SHA256: sum("library"), URL: srv.URL + "/sf/lib.tar.gz",
+				FallbackURLs: []string{srv.URL + "/interstitial/lib.tar.gz", srv.URL + last + "/lib.tar.gz"}},
+			{Name: "app", SHA256: sum("prebuilt"), Built: &Built{Source: srv.URL + "/interstitial/app.tar",
+				SourceFallbackURLs: []string{srv.URL + last + "/app.tar"}, SourceSHA256: sum("appimage"), Script: "make.sh"}},
+		}}
+	}
+	work := t.TempDir()
+	ready, err := Check(release("/mirror"), Options{Client: srv.Client(), WorkDir: work, Log: &bytes.Buffer{}})
+	if err != nil {
+		t.Fatalf("with a good last fallback: %v", err)
+	}
+	if b, _ := os.ReadFile(ready["lib.tar.gz"]); string(b) != "library" {
+		t.Errorf("lib.tar.gz: got %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(work, "app.source")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the downloaded source is still in the work directory: %v", err)
+	}
+
+	work = t.TempDir()
+	_, err = Check(release("/gone"), Options{Client: srv.Client(), WorkDir: work, Log: &bytes.Buffer{}})
+	if err == nil {
+		t.Fatal("with no good URL: no error")
+	}
+	for _, w := range []string{
+		"lib.tar.gz: GET " + srv.URL + "/sf/lib.tar.gz: 403 Forbidden; " + srv.URL + "/interstitial/lib.tar.gz has sha256 " + sum("<html>please wait</html>") + ", the manifest says " + sum("library") + "; GET " + srv.URL + "/gone/lib.tar.gz: 403 Forbidden",
+		"app: source: " + srv.URL + "/interstitial/app.tar has sha256",
+	} {
+		if !strings.Contains(err.Error(), w) {
+			t.Errorf("%v\nwant %q in it", err, w)
+		}
+	}
+	if left, _ := os.ReadDir(work); len(left) != 0 {
+		t.Errorf("left in the work directory: %v", left)
 	}
 }
 

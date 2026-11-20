@@ -10,23 +10,35 @@
 //
 //   - mirrored: the same bytes as an upstream URL, such as a GitLab
 //     archive; or
-//   - built: made from an upstream source by a script outside this tool
-//     (in bazel_rules_em, the openEMS wheels). None here, yet.
+//   - built: made from an upstream source by a script outside this tool,
+//     such as dfu-util by //tools/dfu_util.
 //
-// A dry run downloads every upstream file (each mirrored asset, and the
-// source of each built asset) and checks its sha256. An upload does the
-// same checks, then runs `gh release create` when the release is missing
-// and `gh release upload` for its assets.
+// A dry run gets every upstream file (each mirrored asset, and the source
+// of each built asset) and checks its sha256. An upload does the same
+// checks, then runs `gh release create` when the release is missing and
+// `gh release upload` for its assets.
+//
+// An upstream file comes from --built_dir when a file there has its name:
+// the asset's name for a mirrored asset, the source URL's file name for a
+// built asset's source. A build usually leaves them there, and some hosts
+// (SourceForge) refuse this tool's downloads. A local file with other
+// bytes is an error. Otherwise the file is downloaded from its URL, then
+// from each fallback URL in turn while a download fails or has another
+// sha256. --built_dir holds one release's files, so it needs --release.
 package mirror
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -52,15 +64,20 @@ type Asset struct {
 	Name   string `json:"name"`
 	SHA256 string `json:"sha256"`
 	// URL is the upstream file a mirrored asset copies.
-	URL   string `json:"url,omitempty"`
-	Built *Built `json:"built,omitempty"`
+	URL string `json:"url,omitempty"`
+	// FallbackURLs serve the same bytes as URL; each is tried, in order,
+	// when the download before it fails.
+	FallbackURLs []string `json:"fallback_urls,omitempty"`
+	Built        *Built   `json:"built,omitempty"`
 }
 
 // Built says how a built asset is made.
 type Built struct {
-	Source       string `json:"source"`
-	SourceSHA256 string `json:"source_sha256"`
-	Script       string `json:"script"`
+	Source string `json:"source"`
+	// SourceFallbackURLs serve the same bytes as Source, as FallbackURLs.
+	SourceFallbackURLs []string `json:"source_fallback_urls,omitempty"`
+	SourceSHA256       string   `json:"source_sha256"`
+	Script             string   `json:"script"`
 }
 
 var hexSHA = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -112,6 +129,19 @@ func Parse(b []byte) (*Manifest, error) {
 				return nil, fmt.Errorf("%s: give either url (mirrored) or built", where)
 			case a.Built != nil && (a.Built.Source == "" || a.Built.Script == "" || !hexSHA.MatchString(a.Built.SourceSHA256)):
 				return nil, fmt.Errorf("%s: built needs source, a source_sha256 of 64 hex digits, and script", where)
+			case a.Built != nil && len(a.FallbackURLs) > 0:
+				return nil, fmt.Errorf("%s: a built asset's fallbacks are built.source_fallback_urls", where)
+			case a.Built != nil && !safeName(sourceName(a.Built.Source)):
+				return nil, fmt.Errorf("%s: built.source %q does not end in a file name", where, a.Built.Source)
+			}
+			fallbacks := a.FallbackURLs
+			if a.Built != nil {
+				fallbacks = a.Built.SourceFallbackURLs
+			}
+			for _, u := range fallbacks {
+				if u == "" {
+					return nil, fmt.Errorf("%s: an empty fallback URL", where)
+				}
 			}
 		}
 	}
@@ -135,12 +165,64 @@ func Download(client *http.Client, url, dir, name string) (string, error) {
 	h := sha256.New()
 	if _, err := io.Copy(io.MultiWriter(f, h), resp.Body); err != nil {
 		f.Close()
+		os.Remove(f.Name())
 		return "", fmt.Errorf("GET %s: %w", url, err)
 	}
 	if err := f.Close(); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// sourceName is the file name of a source URL: where --built_dir may hold it.
+func sourceName(u string) string {
+	if p, err := url.Parse(u); err == nil && p.Path != "" && !strings.HasSuffix(p.Path, "/") {
+		return path.Base(p.Path)
+	}
+	return ""
+}
+
+// fetched is one upstream file that fetch got.
+type fetched struct {
+	path, sum, from string
+	// local: path is in o.BuiltDir, so the caller must not remove it.
+	local bool
+}
+
+// fetch gets one upstream file whose sha256 should be want: from
+// o.BuiltDir when it holds local (whatever its sha256, which the caller
+// checks), else downloaded into o.WorkDir as name, from each of urls in
+// turn until one has the sha256 want. When none has, the error lists
+// every failed download and every other sha256.
+func fetch(o Options, local string, urls []string, name, want string) (fetched, error) {
+	if o.BuiltDir != "" {
+		p := filepath.Join(o.BuiltDir, local)
+		fi, err := os.Stat(p)
+		switch {
+		case err == nil && !fi.Mode().IsRegular():
+			return fetched{}, fmt.Errorf("%s is not a regular file", p)
+		case err == nil:
+			sum, err := FileSHA256(p)
+			return fetched{path: p, sum: sum, from: p, local: true}, err
+		case !errors.Is(err, fs.ErrNotExist):
+			return fetched{}, err
+		}
+	}
+	p := filepath.Join(o.WorkDir, name)
+	var failed []string
+	for _, u := range urls {
+		sum, err := Download(o.Client, u, o.WorkDir, name)
+		switch {
+		case err != nil:
+			failed = append(failed, err.Error())
+		case sum != want:
+			failed = append(failed, fmt.Sprintf("%s has sha256 %s, the manifest says %s", u, sum, want))
+		default:
+			return fetched{path: p, sum: sum, from: u}, nil
+		}
+	}
+	os.Remove(p)
+	return fetched{}, fmt.Errorf("%s", strings.Join(failed, "; "))
 }
 
 // FileSHA256 returns the sha256 of the file at p, in hex.
@@ -163,13 +245,14 @@ type Options struct {
 	// WorkDir gets the downloads.
 	WorkDir string
 	// BuiltDir holds the built assets, by name. Empty: built assets are
-	// not checked, only their sources.
+	// not checked, only their sources. A mirrored asset or a source found
+	// there, by name, is used instead of downloading it.
 	BuiltDir string
 	// Log gets one line per file checked.
 	Log io.Writer
 }
 
-// Check downloads and checks every upstream file of release r, and the
+// Check gets and checks every upstream file of release r, and the
 // built assets in o.BuiltDir. It returns the path of each asset that is
 // ready to upload, by name, and an error that lists every mismatch.
 func Check(r Release, o Options) (map[string]string, error) {
@@ -177,35 +260,38 @@ func Check(r Release, o Options) (map[string]string, error) {
 	var problems []string
 	for _, a := range r.Assets {
 		if a.URL != "" {
-			got, err := Download(o.Client, a.URL, o.WorkDir, a.Name)
+			f, err := fetch(o, a.Name, append([]string{a.URL}, a.FallbackURLs...), a.Name, a.SHA256)
 			switch {
 			case err != nil:
 				problems = append(problems, fmt.Sprintf("%s: %v", a.Name, err))
-			case got != a.SHA256:
-				problems = append(problems, fmt.Sprintf("%s: %s has sha256 %s, the manifest says %s", a.Name, a.URL, got, a.SHA256))
+			case f.sum != a.SHA256:
+				problems = append(problems, fmt.Sprintf("%s: %s has sha256 %s, the manifest says %s", a.Name, f.from, f.sum, a.SHA256))
 			default:
-				fmt.Fprintf(o.Log, "ok %s/%s %s (from %s)\n", r.Tag, a.Name, got, a.URL)
-				ready[a.Name] = filepath.Join(o.WorkDir, a.Name)
+				fmt.Fprintf(o.Log, "ok %s/%s %s (from %s)\n", r.Tag, a.Name, f.sum, f.from)
+				ready[a.Name] = f.path
 			}
 			continue
 		}
 		src := a.Name + ".source"
-		got, err := Download(o.Client, a.Built.Source, o.WorkDir, src)
+		f, err := fetch(o, sourceName(a.Built.Source), append([]string{a.Built.Source}, a.Built.SourceFallbackURLs...), src, a.Built.SourceSHA256)
 		switch {
 		case err != nil:
 			problems = append(problems, fmt.Sprintf("%s: source: %v", a.Name, err))
-		case got != a.Built.SourceSHA256:
-			problems = append(problems, fmt.Sprintf("%s: source %s has sha256 %s, the manifest says %s", a.Name, a.Built.Source, got, a.Built.SourceSHA256))
+		case f.sum != a.Built.SourceSHA256:
+			problems = append(problems, fmt.Sprintf("%s: source %s has sha256 %s, the manifest says %s", a.Name, f.from, f.sum, a.Built.SourceSHA256))
 		default:
-			fmt.Fprintf(o.Log, "ok %s/%s: source %s (from %s)\n", r.Tag, a.Name, got, a.Built.Source)
+			fmt.Fprintf(o.Log, "ok %s/%s: source %s (from %s)\n", r.Tag, a.Name, f.sum, f.from)
 		}
-		os.Remove(filepath.Join(o.WorkDir, src))
+		// Only a download of ours; never a file in --built_dir.
+		if f.path != "" && !f.local {
+			os.Remove(f.path)
+		}
 		if o.BuiltDir == "" {
 			fmt.Fprintf(o.Log, "-- %s/%s: built by %s; give --built_dir to check and upload it\n", r.Tag, a.Name, a.Built.Script)
 			continue
 		}
 		p := filepath.Join(o.BuiltDir, a.Name)
-		got, err = FileSHA256(p)
+		got, err := FileSHA256(p)
 		switch {
 		case err != nil:
 			problems = append(problems, fmt.Sprintf("%s: %v", a.Name, err))

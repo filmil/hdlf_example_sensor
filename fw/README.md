@@ -179,7 +179,13 @@ from pinned sources in a pinned Ubuntu container with podman; two builds
 give the same bytes, and the tool fails unless the binary has the sha256
 `MODULE.bazel` pins. The binary is mirrored as the release
 `mirror-dfu-util-0.11`, which the operator uploads with
-`bazel run //tools/mirror -- --dry_run=false --built_dir=DIR`.
+`bazel run //tools/mirror -- --dry_run=false --release=mirror-dfu-util-0.11 --built_dir=DIR`.
+The mirror tool takes each source from `DIR` too, where the build left
+it, checked against the same sha256, rather than downloading it.
+
+dfu-util's source tarball is fetched first from our copy on
+bt.hdlfactory.com, then from SourceForge and Ubuntu's snapshot;
+`third_party/dfu_util/README.md` says how that copy is published.
 dfu-util is GPL-2.0-or-later and libusb LGPL-2.1-or-later. musl is MIT,
 with some parts under BSD-2-Clause, BSD-3-Clause, ISC and other permissive
 terms, as its `LICENSE` lists. Their licences are in `//third_party`. The

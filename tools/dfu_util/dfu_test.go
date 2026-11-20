@@ -3,12 +3,15 @@
 package dfuutil
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -49,7 +52,7 @@ func TestInputsArePinned(t *testing.T) {
 	}
 	for _, want := range []string{
 		`fetch "$LIBUSB_URL" "$LIBUSB_SHA256"`,
-		`fetch "$DFU_UTIL_URL" "$DFU_UTIL_SHA256"`,
+		`fetch "$DFU_UTIL_URL" "$DFU_UTIL_SHA256" "/work/$DFU" "${DFU_FALLBACKS[@]}"`,
 		`fetch "$MUSL_ORIG_URL" "$MUSL_ORIG_SHA256"`,
 		`fetch "$MUSL_DEBIAN_URL" "$MUSL_DEBIAN_SHA256"`,
 		`sha256sum -c -`,
@@ -120,6 +123,7 @@ func TestCommand(t *testing.T) {
 		"APT_SNAPSHOT=" + AptSnapshot,
 		"LIBUSB_URL=" + LibUSB.URL, "LIBUSB_SHA256=" + LibUSB.SHA256,
 		"DFU_UTIL_URL=" + DfuUtil.URL, "DFU_UTIL_SHA256=" + DfuUtil.SHA256,
+		"DFU_UTIL_FALLBACK_URLS=" + strings.Join(DfuUtil.Fallbacks, " "),
 		"MUSL_ORIG_URL=" + MuslSource[0].URL, "MUSL_ORIG_SHA256=" + MuslSource[0].SHA256,
 		"MUSL_DEBIAN_URL=" + MuslSource[1].URL, "MUSL_DEBIAN_SHA256=" + MuslSource[1].SHA256,
 		"JOBS=3",
@@ -128,8 +132,8 @@ func TestCommand(t *testing.T) {
 			t.Errorf("no -e %q in %q", want, env)
 		}
 	}
-	if len(env) != 10 {
-		t.Errorf("%d -e arguments, want 10: %q", len(env), env)
+	if len(env) != 11 {
+		t.Errorf("%d -e arguments, want 11: %q", len(env), env)
 	}
 }
 
@@ -151,13 +155,15 @@ func TestMatchesModuleAndManifest(t *testing.T) {
 			Tag    string `json:"tag"`
 			Notes  string `json:"notes"`
 			Assets []struct {
-				Name   string `json:"name"`
-				SHA256 string `json:"sha256"`
-				URL    string `json:"url"`
-				Built  *struct {
-					Source       string `json:"source"`
-					SourceSHA256 string `json:"source_sha256"`
-					Script       string `json:"script"`
+				Name         string   `json:"name"`
+				SHA256       string   `json:"sha256"`
+				URL          string   `json:"url"`
+				FallbackURLs []string `json:"fallback_urls"`
+				Built        *struct {
+					Source             string   `json:"source"`
+					SourceFallbackURLs []string `json:"source_fallback_urls"`
+					SourceSHA256       string   `json:"source_sha256"`
+					Script             string   `json:"script"`
 				} `json:"built"`
 			} `json:"assets"`
 		} `json:"releases"`
@@ -177,7 +183,8 @@ func TestMatchesModuleAndManifest(t *testing.T) {
 				if a.SHA256 != BinarySHA256 {
 					t.Errorf("manifest: dfu-util has sha256 %s, the tool %s", a.SHA256, BinarySHA256)
 				}
-				if a.Built == nil || a.Built.Source != DfuUtil.URL || a.Built.SourceSHA256 != DfuUtil.SHA256 || !strings.Contains(a.Built.Script, "//tools/dfu_util") {
+				if a.Built == nil || a.Built.Source != DfuUtil.URL || strings.Join(a.Built.SourceFallbackURLs, " ") != strings.Join(DfuUtil.Fallbacks, " ") ||
+					a.Built.SourceSHA256 != DfuUtil.SHA256 || !strings.Contains(a.Built.Script, "//tools/dfu_util") {
 					t.Errorf("manifest: dfu-util is not built from %s by //tools/dfu_util", DfuUtil.URL)
 				}
 				if want := "https://github.com/" + m.Repo + "/releases/download/" + r.Tag + "/dfu-util"; pin[2] != want {
@@ -187,8 +194,9 @@ func TestMatchesModuleAndManifest(t *testing.T) {
 				if a.SHA256 != LicensesSHA256 {
 					t.Errorf("manifest: the licences have sha256 %s, the tool %s", a.SHA256, LicensesSHA256)
 				}
-				if a.Built == nil || !strings.Contains(a.Built.Script, "//tools/dfu_util") {
-					t.Errorf("manifest: the licences are not built by //tools/dfu_util")
+				if a.Built == nil || !strings.Contains(a.Built.Script, "//tools/dfu_util") || a.Built.Source != DfuUtil.URL ||
+					strings.Join(a.Built.SourceFallbackURLs, " ") != strings.Join(DfuUtil.Fallbacks, " ") || a.Built.SourceSHA256 != DfuUtil.SHA256 {
+					t.Errorf("manifest: the licences are not built from %+v by //tools/dfu_util", DfuUtil)
 				}
 			case "musl_1.2.5.orig.tar.gz", "musl_1.2.5-3build1.debian.tar.xz":
 				ok := false
@@ -203,12 +211,14 @@ func TestMatchesModuleAndManifest(t *testing.T) {
 					t.Errorf("manifest: %s is not %+v", a.Name, LibUSB)
 				}
 			case "dfu-util-0.11.tar.gz":
-				if a.URL != DfuUtil.URL || a.SHA256 != DfuUtil.SHA256 {
+				if a.URL != DfuUtil.URL || strings.Join(a.FallbackURLs, " ") != strings.Join(DfuUtil.Fallbacks, " ") || a.SHA256 != DfuUtil.SHA256 {
 					t.Errorf("manifest: %s is not %+v", a.Name, DfuUtil)
 				}
 			}
 		}
-		for _, want := range []string{LibUSB.URL, LibUSB.SHA256, DfuUtil.URL, DfuUtil.SHA256, AptSnapshot, "GPL-2.0-or-later", "LGPL-2.1-or-later", "musl MIT"} {
+		// The notes name SourceForge, the project's own URL, not our copy:
+		// a release is permanent, and our copy may not be published yet.
+		for _, want := range []string{LibUSB.URL, LibUSB.SHA256, DfuUtil.Fallbacks[0], DfuUtil.SHA256, AptSnapshot, "GPL-2.0-or-later", "LGPL-2.1-or-later", "musl MIT"} {
 			if !strings.Contains(r.Notes, want) {
 				t.Errorf("manifest: the notes of %s do not name %s", r.Tag, want)
 			}
@@ -389,11 +399,11 @@ func TestParseArgs(t *testing.T) {
 		t.Errorf("defaults: %+v, %v", o, err)
 	}
 	for _, args := range [][]string{
-		{},                         // no --out
-		{"--out=/o", "extra"},      // a stray argument
-		{"--out=/o", "--jobs=0"},   // no jobs
-		{"--out=/o", "--bogus"},    // an unknown flag
-		{"--out=/a:b"},             // a ":" podman cannot mount
+		{},                       // no --out
+		{"--out=/o", "extra"},    // a stray argument
+		{"--out=/o", "--jobs=0"}, // no jobs
+		{"--out=/o", "--bogus"},  // an unknown flag
+		{"--out=/a:b"},           // a ":" podman cannot mount
 	} {
 		if o, err := ParseArgs(args, "/w"); err == nil {
 			t.Errorf("ParseArgs(%q) = %+v, want an error", args, o)
@@ -446,4 +456,106 @@ func TestCleanOut(t *testing.T) {
 	if left, _ := os.ReadDir(d); len(left) != 1 {
 		t.Errorf("%d files left, want 1", len(left))
 	}
+}
+
+// The .torrent published beside DfuUtil.URL is bt.hdlfactory.com's kind:
+// one file, 1 MiB pieces, no tracker, and the file's URL as its web seed.
+// Its sha256 is pinned, and third_party/dfu_util/README.md's publish step names it.
+func TestTorrent(t *testing.T) {
+	raw := readRunfile(t, "third_party/dfu_util/dfu-util-0.11.tar.gz.torrent")
+	if got := fmt.Sprintf("%x", sha256.Sum256(raw)); got != DfuUtilTorrentSHA256 {
+		t.Errorf("the .torrent has sha256 %s, DfuUtilTorrentSHA256 is %s", got, DfuUtilTorrentSHA256)
+	}
+	if readme := string(readRunfile(t, "third_party/dfu_util/README.md")); strings.Count(readme, DfuUtilTorrentSHA256) < 2 || strings.Count(readme, DfuUtil.SHA256) < 2 {
+		t.Errorf("third_party/dfu_util/README.md's publish step and check do not name the pinned sha256s")
+	}
+	v, rest, err := bdecode(raw)
+	if err != nil || len(rest) != 0 {
+		t.Fatalf("the .torrent is not one bencoded value: %v, %d bytes after it", err, len(rest))
+	}
+	top, _ := v.(map[string]any)
+	info, _ := top["info"].(map[string]any)
+	if info == nil {
+		t.Fatal("the .torrent has no info")
+	}
+	for k := range top {
+		if k != "created by" && k != "info" && k != "url-list" {
+			t.Errorf("the .torrent has %q (a tracker?)", k)
+		}
+	}
+	pieces, _ := info["pieces"].(string)
+	for _, c := range []struct {
+		what      string
+		got, want any
+	}{
+		{"name", info["name"], filepath.Base(DfuUtil.URL)},
+		{"length", info["length"], int64(DfuUtilSize)},
+		{"piece length", info["piece length"], int64(1 << 20)},
+		{"pieces", len(pieces), 20 * ((DfuUtilSize + 1<<20 - 1) >> 20)},
+		{"url-list", fmt.Sprint(top["url-list"]), fmt.Sprint([]any{DfuUtil.URL})},
+	} {
+		if c.got != c.want {
+			t.Errorf("the .torrent's %s is %v, want %v", c.what, c.got, c.want)
+		}
+	}
+}
+
+// bdecode decodes one bencoded value: a string, an int64, a []any or a
+// map[string]any, and returns what follows it.
+func bdecode(b []byte) (any, []byte, error) {
+	if len(b) == 0 {
+		return nil, nil, fmt.Errorf("unexpected end")
+	}
+	switch c := b[0]; {
+	case c == 'i':
+		e := bytes.IndexByte(b, 'e')
+		if e < 0 {
+			return nil, nil, fmt.Errorf("unterminated integer")
+		}
+		n, err := strconv.ParseInt(string(b[1:e]), 10, 64)
+		return n, b[e+1:], err
+	case c == 'l' || c == 'd':
+		var list []any
+		dict := map[string]any{}
+		rest := b[1:]
+		for len(rest) > 0 && rest[0] != 'e' {
+			var k, v any
+			var err error
+			if c == 'd' {
+				if k, rest, err = bdecode(rest); err != nil {
+					return nil, nil, err
+				}
+			}
+			if v, rest, err = bdecode(rest); err != nil {
+				return nil, nil, err
+			}
+			if c == 'd' {
+				ks, ok := k.(string)
+				if !ok {
+					return nil, nil, fmt.Errorf("a non-string key")
+				}
+				dict[ks] = v
+			} else {
+				list = append(list, v)
+			}
+		}
+		if len(rest) == 0 {
+			return nil, nil, fmt.Errorf("unterminated list or dictionary")
+		}
+		if c == 'd' {
+			return dict, rest[1:], nil
+		}
+		return list, rest[1:], nil
+	case c >= '0' && c <= '9':
+		colon := bytes.IndexByte(b, ':')
+		if colon < 0 {
+			return nil, nil, fmt.Errorf("a string without a length")
+		}
+		n, err := strconv.Atoi(string(b[:colon]))
+		if err != nil || n < 0 || colon+1+n > len(b) {
+			return nil, nil, fmt.Errorf("a bad string length")
+		}
+		return string(b[colon+1 : colon+1+n]), b[colon+1+n:], nil
+	}
+	return nil, nil, fmt.Errorf("unexpected %q", b[0])
 }

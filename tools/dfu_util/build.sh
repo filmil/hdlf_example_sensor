@@ -14,6 +14,7 @@
 #   APT_SNAPSHOT                  the snapshot.ubuntu.com time of every package;
 #   LIBUSB_URL, LIBUSB_SHA256     libusb's release tarball;
 #   DFU_UTIL_URL, DFU_UTIL_SHA256 dfu-util's release tarball;
+#   DFU_UTIL_FALLBACK_URLS        the same bytes elsewhere, space-separated;
 #   MUSL_ORIG_URL, MUSL_ORIG_SHA256, MUSL_DEBIAN_URL, MUSL_DEBIAN_SHA256
 #                                 Ubuntu's musl source package in the snapshot;
 #   JOBS                          parallel compile jobs.
@@ -44,9 +45,20 @@ apt-get "${APT[@]}" update -q
 DEBIAN_FRONTEND=noninteractive apt-get "${APT[@]}" install -y -q --no-install-recommends \
   ca-certificates curl bzip2 xz-utils gcc libc6-dev musl-tools linux-libc-dev binutils make pkg-config
 
-fetch() { # URL SHA256 FILE
-  curl -fsSL --retry 5 --retry-all-errors -o "$3" "$1"
-  echo "$2  $3" | sha256sum -c -
+fetch() { # URL SHA256 FILE [FALLBACK_URL...]: each URL in turn until one downloads
+  local url=$1 sum=$2 file=$3
+  shift 3
+  for u in "$url" "$@"; do
+    # --retry: only transient errors (timeouts, 429, 5xx, refused
+    # connections), so a 403 or 404 moves on to the next URL at once.
+    if curl -fsSL --retry 5 --retry-connrefused -o "$file" "$u" &&
+      echo "$sum  $file" | sha256sum -c -; then
+      return
+    fi
+    echo "fetch: $u failed, or has another sha256" >&2
+  done
+  rm -f "$file"
+  return 1
 }
 
 # The same paths and times every run, so two builds give the same bytes.
@@ -70,7 +82,8 @@ mkdir -p /work/libusb && tar -xjf "/work/$LIBUSB" -C /work/libusb --strip-compon
   --disable-udev --disable-examples-build --disable-tests-build && make -j"$JOBS" && make install)
 
 # dfu-util, linked statically with that libusb.
-fetch "$DFU_UTIL_URL" "$DFU_UTIL_SHA256" "/work/$DFU"
+read -ra DFU_FALLBACKS <<<"${DFU_UTIL_FALLBACK_URLS:-}"
+fetch "$DFU_UTIL_URL" "$DFU_UTIL_SHA256" "/work/$DFU" "${DFU_FALLBACKS[@]}"
 mkdir -p /work/dfu && tar -xzf "/work/$DFU" -C /work/dfu --strip-components=1
 (cd /work/dfu && PKG_CONFIG_PATH=$P/lib/pkgconfig CFLAGS="$FLAGS" LDFLAGS="-static" \
   ./configure --prefix=$P && make -j"$JOBS" && make install)
