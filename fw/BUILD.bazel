@@ -216,3 +216,41 @@ rust_test(
         "@crates//:embedded-hal-async",
     ],
 )
+
+# bazel run //fw:flash: writes fw.bin over the STM32's ROM USB DFU
+# bootloader with dfu-util (flash/flash.rs says how). Manual: never built
+# by //..., run in CI or by an agent; it is for the operator, with the
+# board on BOOT0. The static dfu-util is x86_64 Linux only.
+rust_binary(
+    name = "flash",
+    srcs = ["flash/flash.rs"],
+    data = [
+        ":fw_bin",
+        "//third_party/dfu_util",
+    ],
+    rustc_env = {
+        "DFU_UTIL": "$(rlocationpath //third_party/dfu_util)",
+        "FW_BIN": "$(rlocationpath :fw_bin)",
+    },
+    tags = ["manual"],
+    target_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+    deps = [":flash_lib"],
+)
+
+# //fw:flash's arguments, which CI builds and tests although //fw:flash
+# itself is manual.
+rust_library(
+    name = "flash_lib",
+    srcs = ["flash/lib.rs"],
+    deps = ["@rules_rust//rust/runfiles"],
+)
+
+rust_test(
+    name = "flash_lib_test",
+    size = "small",
+    srcs = ["flash/lib_test.rs"],
+    deps = [":flash_lib"],
+)

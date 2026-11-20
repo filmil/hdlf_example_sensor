@@ -133,6 +133,46 @@ is an error.
 that must fail, one for each check above. `:pins_test` checks the
 generated crate against what `elec/circuit.py` wires.
 
+## Flashing the board
+
+```sh
+bazel run //fw:flash
+```
+
+`//fw:flash` writes `fw.bin` over the STM32F042's ROM USB DFU
+bootloader. It is for the operator, at the board: CI never builds it
+(it is `manual`), and no agent runs it. It runs on x86_64 Linux only, the
+one platform its static dfu-util is built for.
+
+1. With the board unplugged, close JP1, the solder jumper that pulls
+   BOOT0 high. Then plug the board in. It comes up as the STM32
+   bootloader, USB 0483:df11. Have no other STM32 bootloader on USB.
+2. Run `bazel run //fw:flash`, with no arguments: it refuses any. It runs
+   `dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D fw.bin`, which
+   writes the internal flash from 0x08000000 and leaves DFU mode.
+3. Unplug the board, open JP1 again, and plug it back in: it starts from
+   flash.
+
+On Linux the user needs access to the device, for example through the
+udev rule in dfu-util's `doc/60-dfuse.rules`.
+
+`dfu-util` comes from `//third_party/dfu_util`: dfu-util 0.11, statically
+linked with libusb 1.0.30 (`//third_party/libusb`) and the musl C library
+(`//third_party/musl`), so the host needs nothing installed. musl, not
+glibc, so that no LGPL C library is linked into the binary. `bazel run //tools/dfu_util -- --out=DIR` builds it
+from pinned sources in a pinned Ubuntu container with podman; two builds
+give the same bytes, and the tool fails unless the binary has the sha256
+`MODULE.bazel` pins. The binary is mirrored as the release
+`mirror-dfu-util-0.11`, which the operator uploads with
+`bazel run //tools/mirror -- --dry_run=false --built_dir=DIR`.
+dfu-util is GPL-2.0-or-later and libusb LGPL-2.1-or-later. musl is MIT,
+with some parts under BSD-2-Clause, BSD-3-Clause, ISC and other permissive
+terms, as its `LICENSE` lists. Their licences are in `//third_party`. The
+release holds the source of all three, as downloaded: dfu-util's,
+libusb's, and Ubuntu's musl source package, since dfu-util's GPL asks for
+the source of every library linked into a binary that is handed out. None of the three is part
+of the firmware.
+
 ## The HDC2080 driver
 
 `//fw:hdc2080` is a `no_std` crate on embedded-hal-async's `I2c` trait:
