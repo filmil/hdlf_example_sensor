@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# The Rust toolchain's licences, from the seven pinned tarballs (README.md).
+# The toolchain itself is registered in MODULE.bazel; no build target uses
+# this package. //tools/mirror:mirror_test checks it against MODULE.bazel.
+package(default_visibility = ["//visibility:public"])
+
+exports_files(glob(["*"]))
+
+filegroup(
+    name = "files",
+    srcs = glob(["*"]),
+)
