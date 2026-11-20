@@ -1,0 +1,15 @@
+{
+  "crate": "embassy-net-driver-0.2.0",
+  "files": [
+    {
+      "file": "LICENSE-APACHE",
+      "from": "https://raw.githubusercontent.com/embassy-rs/embassy/35ffdf2143991422c67f4b3517303a0b8f7a3bbe/LICENSE-APACHE",
+      "sha256": "5f91c03df5bebf0d22bf2f673c597d1cf93183de27b827167315787f15bee578"
+    },
+    {
+      "file": "LICENSE-MIT",
+      "from": "https://raw.githubusercontent.com/embassy-rs/embassy/35ffdf2143991422c67f4b3517303a0b8f7a3bbe/LICENSE-MIT",
+      "sha256": "11b4abf818b9c23aca1e151b86abf4337d43f71a4b4225c399d887a36fe7429a"
+    }
+  ]
+}

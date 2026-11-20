@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_python//python:py_binary.bzl", "py_binary")
+
+# bazel run //tools/crate_licences: writes //third_party/crates/<crate>/
+# (LICENSE and SOURCE.json) for every crate of Cargo.lock, from the .crate
+# or from upstream at a recorded or pinned commit (pins.json). By hand
+# only, after Cargo.lock changes: it fetches from the network, so no build
+# or test runs it. //fw:licence_test checks what it wrote.
+py_binary(
+    name = "crate_licences",
+    srcs = ["crate_licences.py"],
+    data = ["pins.json"],
+    main = "crate_licences.py",
+)

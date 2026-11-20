@@ -1,0 +1,15 @@
+{
+  "crate": "embedded-hal-async-1.0.0",
+  "files": [
+    {
+      "file": "LICENSE-APACHE",
+      "from": "the .crate",
+      "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+    },
+    {
+      "file": "LICENSE-MIT",
+      "from": "the .crate",
+      "sha256": "b32b47118594bca5e21a37d64d9924bff856bf4f688c482b417cc5e885d6e7bf"
+    }
+  ]
+}

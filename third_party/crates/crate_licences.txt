@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# Every registry crate of fw/Cargo.lock: name, version, then the licence
+# Every registry crate of third_party/crates/Cargo.lock: name, version, then the licence
 # expression of the crate's own Cargo.toml (the rest of the line).
 # Regenerate it whenever Cargo.lock changes. //fw:licence_test checks that
 # it covers Cargo.lock exactly, and that each expression offers a licence

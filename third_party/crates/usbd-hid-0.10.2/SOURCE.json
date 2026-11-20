@@ -1,0 +1,10 @@
+{
+  "crate": "usbd-hid-0.10.2",
+  "files": [
+    {
+      "file": "LICENSE",
+      "from": "the .crate",
+      "sha256": "4cec2a3c5484bbe8af8cc2cf73ef0b6c810e1a1f88f31ca84848705427450e40"
+    }
+  ]
+}

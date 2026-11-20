@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Every registry crate of fw/Cargo.lock is in fw/crate_licences.txt, once,
+//! Every registry crate of third_party/crates/Cargo.lock is in third_party/crates/crate_licences.txt, once,
 //! at its version, and its licence expression offers a licence the project
 //! accepts. The expression is SPDX: AND binds tighter than OR, parentheses
 //! group, and "/" counts as OR, as old crates write it. An OR needs one
@@ -162,4 +162,41 @@ fn the_rule() {
     error("(MIT OR Apache-2.0");
     error("MIT OR");
     error("");
+}
+
+/// Every locked crate has its directory under //third_party/crates, as
+/// `bazel run //tools/crate_licences` writes it: a LICENSE that is not
+/// empty, and a SOURCE.json whose every file has its header in LICENSE.
+/// A crate bump that skips the tool fails here.
+#[test]
+fn every_locked_crate_has_its_licence_directory() {
+    let lock = std::env::var("CARGO_LOCK").expect("CARGO_LOCK");
+    let dir = std::path::Path::new(&lock).parent().expect("Cargo.lock's directory").to_path_buf();
+    let mut bad = Vec::new();
+    let crates = locked();
+    for (name, version) in &crates {
+        let d = dir.join(format!("{}-{}", name, version));
+        let licence = std::fs::read_to_string(d.join("LICENSE")).unwrap_or_default();
+        let source = std::fs::read_to_string(d.join("SOURCE.json")).unwrap_or_default();
+        if licence.trim().is_empty() {
+            bad.push(format!("{}-{}: no LICENSE", name, version));
+            continue;
+        }
+        // "file": "LICENSE-MIT", ... "from": "...": each must head a part.
+        let files: Vec<&str> = source
+            .split("\"file\": \"")
+            .skip(1)
+            .filter_map(|s| s.split('"').next())
+            .collect();
+        if files.is_empty() {
+            bad.push(format!("{}-{}: SOURCE.json lists no file", name, version));
+        }
+        for f in files {
+            if !licence.contains(&format!("==> {} (", f)) {
+                bad.push(format!("{}-{}: LICENSE lacks {}", name, version, f));
+            }
+        }
+    }
+    assert!(bad.is_empty(), "run `bazel run //tools/crate_licences`:\n{}", bad.join("\n"));
+    println!("{} crates, each with its licence directory", crates.len());
 }

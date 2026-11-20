@@ -1,0 +1,10 @@
+{
+  "crate": "sharded-slab-0.1.7",
+  "files": [
+    {
+      "file": "LICENSE",
+      "from": "the .crate",
+      "sha256": "eafbfa606bc005ed7fd2f623d65af17ffe4ef7c017221ac14405bf4140771ea9"
+    }
+  ]
+}

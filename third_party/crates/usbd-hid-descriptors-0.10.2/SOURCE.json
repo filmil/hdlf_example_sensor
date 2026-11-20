@@ -1,0 +1,12 @@
+{
+  "crate": "usbd-hid-descriptors-0.10.2",
+  "reconstructed": false,
+  "why": "The crate records this commit but its Cargo.toml names no repository; it is in usbd-hid's repository, as its sibling usbd-hid's Cargo.toml says.",
+  "files": [
+    {
+      "file": "LICENSE",
+      "from": "https://raw.githubusercontent.com/twitchyliquid64/usbd-hid/81f90498348eb084be4004139a136468aed6b1a1/LICENSE",
+      "sha256": "4cec2a3c5484bbe8af8cc2cf73ef0b6c810e1a1f88f31ca84848705427450e40"
+    }
+  ]
+}

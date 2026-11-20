@@ -2,14 +2,14 @@
 load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
 
 # The mirror of what the firmware's build downloads: the Rust toolchain's
-# tarballs and the crates of fw/Cargo.lock (issue #14), as release assets
+# tarballs and the crates of third_party/crates/Cargo.lock (issue #14), as release assets
 # of this repository. Ported from bazel_rules_em.
 #
 #   bazel run //tools/mirror    checks every upstream file of manifest.json
 #
 # The operator uploads with --dry_run=false (see cmd/main.go). The test
 # runs the checks against a local server, never the network, and keeps
-# manifest.json equal to what MODULE.bazel and fw/Cargo.lock fetch.
+# manifest.json equal to what MODULE.bazel and third_party/crates/Cargo.lock fetch.
 
 go_library(
     name = "mirror_lib",
@@ -29,7 +29,7 @@ go_test(
         "manifest.json",
         "//:MODULE.bazel",
         "//:bazel_downloader.cfg",
-        "//fw:Cargo.lock",
+        "//third_party/crates:Cargo.lock",
     ],
     embed = [":mirror_lib"],
     pure = "on",

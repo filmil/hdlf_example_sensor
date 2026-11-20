@@ -1,0 +1,15 @@
+{
+  "crate": "generator-0.8.12",
+  "files": [
+    {
+      "file": "LICENSE-APACHE",
+      "from": "the .crate",
+      "sha256": "7ecb6108c3b8570339bb27e0f3affbe19300263a0e7a7e8c5f59a028a6eb70b3"
+    },
+    {
+      "file": "LICENSE-MIT",
+      "from": "the .crate",
+      "sha256": "d0efb39501d05934b5d141573627ab9ead815287bb49acb37855642cf6a7205b"
+    }
+  ]
+}

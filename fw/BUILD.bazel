@@ -13,11 +13,6 @@ load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
-exports_files([
-    "Cargo.lock",
-    "stm32-metapac-device-x.patch",
-])
-
 platform(
     name = "stm32f042",
     constraint_values = [
@@ -45,16 +40,16 @@ rust_binary(
     deps = [
         ":hdc2080",
         ":pins",
-        "@crates//:cortex-m",
-        "@crates//:cortex-m-rt",
-        "@crates//:embassy-executor",
-        "@crates//:embassy-stm32",
-        "@crates//:embassy-sync",
-        "@crates//:embassy-time",
-        "@crates//:embassy-usb",
-        "@crates//:panic-halt",
-        "@crates//:static_cell",
-        "@crates//:stm32-metapac",
+        "//third_party/crates:cortex-m",
+        "//third_party/crates:cortex-m-rt",
+        "//third_party/crates:embassy-executor",
+        "//third_party/crates:embassy-stm32",
+        "//third_party/crates:embassy-sync",
+        "//third_party/crates:embassy-time",
+        "//third_party/crates:embassy-usb",
+        "//third_party/crates:panic-halt",
+        "//third_party/crates:static_cell",
+        "//third_party/crates:stm32-metapac",
     ],
 )
 
@@ -92,18 +87,20 @@ rust_test(
     deps = ["//fw/tools:elf"],
 )
 
-# Every crate in Cargo.lock has an allowed licence.
+# Every crate in Cargo.lock has an allowed licence, and its directory under
+# //third_party/crates with LICENSE and SOURCE.json.
 rust_test(
     name = "licence_test",
     size = "small",
     srcs = ["test/licence_test.rs"],
     data = [
-        "Cargo.lock",
-        "crate_licences.txt",
+        "//third_party/crates:Cargo.lock",
+        "//third_party/crates:crate_licence_files",
+        "//third_party/crates:crate_licences.txt",
     ],
     env = {
-        "CARGO_LOCK": "$(rootpath Cargo.lock)",
-        "LICENCES": "$(rootpath crate_licences.txt)",
+        "CARGO_LOCK": "$(rootpath //third_party/crates:Cargo.lock)",
+        "LICENCES": "$(rootpath //third_party/crates:crate_licences.txt)",
     },
 )
 
@@ -133,7 +130,7 @@ py_binary(
 )
 
 _PINMAP_INPUTS = {
-    "metadata": "@crates//:stm32-metapac-metadata",
+    "metadata": "//third_party/crates:stm32-metapac-metadata",
     "netlist": "//elec:netlist",
     "spec": "pins.json",
     "symbols": "@kicad_libs//:symbols/MCU_ST_STM32F0.kicad_sym",
@@ -149,7 +146,7 @@ genrule(
         "$(execpath :gen_pins)",
         "--netlist $(execpath //elec:netlist)",
         "--symbols $(execpath @kicad_libs//:symbols/MCU_ST_STM32F0.kicad_sym)",
-        "$$(for m in $(execpaths @crates//:stm32-metapac-metadata); do echo --metadata $$m; done)",
+        "$$(for m in $(execpaths //third_party/crates:stm32-metapac-metadata); do echo --metadata $$m; done)",
         "--spec $(execpath pins.json)",
         "--out $@",
     ]),
@@ -184,7 +181,7 @@ py_test(
     args = [
         "--netlist $(rootpath //elec:netlist)",
         "--symbols $(rootpath @kicad_libs//:symbols/MCU_ST_STM32F0.kicad_sym)",
-        "--metadata $(rootpaths @crates//:stm32-metapac-metadata)",
+        "--metadata $(rootpaths //third_party/crates:stm32-metapac-metadata)",
         "--spec $(rootpath pins.json)",
     ],
     data = _PINMAP_INPUTS.values(),
@@ -197,9 +194,9 @@ rust_library(
     name = "hdc2080",
     srcs = ["hdc2080/lib.rs"],
     deps = [
-        "@crates//:embassy-futures",
-        "@crates//:embedded-hal-async",
-        "@crates//:heapless",
+        "//third_party/crates:embassy-futures",
+        "//third_party/crates:embedded-hal-async",
+        "//third_party/crates:heapless",
     ],
 )
 
@@ -211,9 +208,9 @@ rust_test(
     srcs = ["test/hdc2080_test.rs"],
     deps = [
         ":hdc2080",
-        "@crates//:embassy-futures",
-        "@crates//:embedded-hal",
-        "@crates//:embedded-hal-async",
+        "//third_party/crates:embassy-futures",
+        "//third_party/crates:embedded-hal",
+        "//third_party/crates:embedded-hal-async",
     ],
 )
 

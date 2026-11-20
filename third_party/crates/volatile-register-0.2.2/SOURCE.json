@@ -1,0 +1,15 @@
+{
+  "crate": "volatile-register-0.2.2",
+  "files": [
+    {
+      "file": "LICENSE-APACHE",
+      "from": "the .crate",
+      "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+    },
+    {
+      "file": "LICENSE-MIT",
+      "from": "the .crate",
+      "sha256": "0a633406531735659d570e7903394ec52f7707195a3c4af10279f06eec7acc76"
+    }
+  ]
+}

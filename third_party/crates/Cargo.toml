@@ -11,7 +11,7 @@ publish = false
 
 [[bin]]
 name = "fw"
-path = "src/main.rs"
+path = "../../fw/src/main.rs"
 test = false
 bench = false
 

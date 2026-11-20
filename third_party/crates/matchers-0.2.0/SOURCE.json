@@ -1,0 +1,10 @@
+{
+  "crate": "matchers-0.2.0",
+  "files": [
+    {
+      "file": "LICENSE",
+      "from": "the .crate",
+      "sha256": "a47129d738752a6ae52247fea645b42cb320d19e9327f1eb2d1a7f99d9455ad3"
+    }
+  ]
+}

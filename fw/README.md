@@ -50,10 +50,16 @@ bazel test //fw/...
 - **Rust 1.100.0**, through rules_rust 0.75.0, with `rust-std` for the
   host and for `thumbv6m-none-eabi`. `MODULE.bazel` pins each tarball by
   sha256.
-- **The crates** in `Cargo.toml`, locked in `Cargo.lock`. crate_universe
-  builds each from its `.crate` file, pinned by `Cargo.lock`'s checksum.
-  To change them, edit `Cargo.toml` and run
-  `CARGO_BAZEL_REPIN=1 bazel mod tidy`.
+- **The crates** in `//third_party/crates`: `Cargo.toml`, locked in
+  `Cargo.lock`. crate_universe builds each from its `.crate` file, pinned
+  by `Cargo.lock`'s checksum. Targets depend on the aliases there
+  (`//third_party/crates:embassy-stm32`), never on `@crates` directly.
+  Each locked crate has a directory there, `<name>-<version>/`, with its
+  licence files (`LICENSE`) and where each came from (`SOURCE.json`).
+  To change the crates, edit `third_party/crates/Cargo.toml`, run
+  `CARGO_BAZEL_REPIN=1 bazel mod tidy`, then `bazel run
+  //tools/crate_licences` to refresh the licence directories, and update
+  `crate_licences.txt`.
 - **`:fw`** is `fw.elf`: the `firmware` rule (`firmware.bzl`) builds
   `:fw_code` and every crate under it for the platform `:stm32f042`, in
   opt mode, with fat LTO, `opt-level=z`, one codegen unit and
@@ -66,7 +72,7 @@ bazel test //fw/...
 
 stm32-metapac's build script points the linker at the chip's `device.x`
 in the crate's own source directory, which Bazel's link step does not
-see. `stm32-metapac-device-x.patch`, applied by a `crate.annotation` in
+see. `third_party/crates/stm32-metapac-device-x.patch`, applied by a `crate.annotation` in
 `MODULE.bazel`, copies the file into the build script's output
 directory, which the link step does see.
 
@@ -76,17 +82,22 @@ directory, which the link step does see.
 |---|---|
 | `:budget_test` | The ELF fits 32 KB of flash and 6 KB of RAM with at least 1 KB left for the stack, and prints the margin. The same firmware on a chip one byte too small, in flash or in RAM, must fail. The vector table is sound, and `fw.bin` is the ELF's image. |
 | `:fw_determinism_test` | The ELF and `fw.bin` are the same bytes from two configurations. |
-| `:licence_test` | Every crate of `Cargo.lock` is in `crate_licences.txt`, once, at its version, and its SPDX expression offers MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause or Zlib. The one exception is unicode-ident: it is `(MIT OR Apache-2.0) AND Unicode-3.0`, and accepted because it only runs on the build machine, inside proc macros. |
+| `:licence_test` | Every crate of `Cargo.lock` has its directory under `//third_party/crates`, with a `LICENSE` that holds every file its `SOURCE.json` lists, and is in `crate_licences.txt`, once, at its version, and its SPDX expression offers MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause or Zlib. The one exception is unicode-ident: it is `(MIT OR Apache-2.0) AND Unicode-3.0`, and accepted because it only runs on the build machine, inside proc macros. |
 | `tools:elf_test` | The ELF reader, on small ELF files the test writes byte by byte, malformed ones included. |
 | `:pinmap_test`, `:pins_test` | The pin map: see below. |
 | `:hdc2080_test` | The sensor's driver: see below. |
 
 `crate_licences.txt` holds the `license` of each crate's own
-`Cargo.toml`. A change to `Cargo.lock` must update it, or the test fails.
+`Cargo.toml`. A change to `Cargo.lock` must update it and the licence
+directories (`bazel run //tools/crate_licences`), or the test fails.
+Most crates ship their licence files; those that do not (cortex-m and the
+embassy crates keep them at their repository's root) get them from their
+repository at the commit the crate recorded, or one pinned by full SHA in
+`tools/crate_licences/pins.json`.
 
 Every approved crate is a dependency of `:fw_code` already, so this PR
 shows each one builds for the Cortex-M0. The Cortex-M0 has no atomic
-compare-and-swap, so `Cargo.toml` turns on portable-atomic's
+compare-and-swap, so `third_party/crates/Cargo.toml` turns on portable-atomic's
 `critical-section` feature, which cortex-m's single-core critical
 section serves.
 

@@ -1,0 +1,15 @@
+{
+  "crate": "embassy-embedded-hal-0.6.0",
+  "files": [
+    {
+      "file": "LICENSE-APACHE",
+      "from": "https://raw.githubusercontent.com/embassy-rs/embassy/50c6aac5b9b3b0af18f5a7d61725cc8e4d1f7acb/LICENSE-APACHE",
+      "sha256": "64853d2f346cf20ad5a133c441e792d4b99b45adb2ef3acfa2b890d713e4ed0b"
+    },
+    {
+      "file": "LICENSE-MIT",
+      "from": "https://raw.githubusercontent.com/embassy-rs/embassy/50c6aac5b9b3b0af18f5a7d61725cc8e4d1f7acb/LICENSE-MIT",
+      "sha256": "83d04e56c5beb631d65d6bd7b78c9350083084acc19753a3e6e1b68806a607f5"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "crate": "darling_core-0.20.11",
+  "files": [
+    {
+      "file": "LICENSE",
+      "from": "the .crate",
+      "sha256": "8ea93490d74a5a1b1af3ff71d786271b3f1e5f0bea79ac16e02ec533cef040d6"
+    }
+  ]
+}

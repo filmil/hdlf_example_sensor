@@ -1,0 +1,47 @@
+{
+  "comment": "Where tools/crate_licences takes a crate's licence when its .crate ships none and its repository at the recorded commit has none either, or the crate records no repository or commit. Full commit SHAs only: a re-run fetches the same bytes, and a moved tag cannot change them. Entries marked reconstructed have no licence file of their own upstream: SOURCE.json says so.",
+  "crates": {
+    "stm32-metapac-21.0.0": {
+      "repo": "embassy-rs/stm32-data",
+      "commit": "cbf7e8c46096cc622104bd4876e6335491d2b4c0",
+      "path": "",
+      "reconstructed": true,
+      "why": "stm32-metapac 21.0.0 (2026-03-20) declares MIT OR Apache-2.0 but ships no licence file, and records no commit. stm32-data, which generates it, had no licence files then either (its release commit c05b9691035f8978090af617e20869b7302b069b). It added them on 2026-11-06, at this commit: the project's own text for the licence the crate already declared."
+    },
+    "void-1.0.2": {
+      "spdx": {
+        "commit": "ab9b0904b43db6f4b67431efd8821feb821f1c8b",
+        "ids": [
+          "MIT"
+        ]
+      },
+      "copyright": "Copyright (c) 2016 Jonathan Reem",
+      "reconstructed": true,
+      "why": "void declares MIT in Cargo.toml, but neither the crate nor its repository (reem/rust-void, tag 1.0.2 at ab2f4dbb7c95c144ccba2fa8afd11e155aa91133) has a licence file. The text is SPDX's; its copyright line is reconstructed from Cargo.toml's authors and the crate's publish year (2016-04-18)."
+    },
+    "usbd-hid-descriptors-0.10.2": {
+      "repo": "twitchyliquid64/usbd-hid",
+      "commit": "81f90498348eb084be4004139a136468aed6b1a1",
+      "path": "descriptors",
+      "why": "The crate records this commit but its Cargo.toml names no repository; it is in usbd-hid's repository, as its sibling usbd-hid's Cargo.toml says."
+    },
+    "usbd-hid-macros-0.10.2": {
+      "repo": "twitchyliquid64/usbd-hid",
+      "commit": "81f90498348eb084be4004139a136468aed6b1a1",
+      "path": "macros",
+      "why": "As usbd-hid-descriptors: commit recorded, repository not named."
+    },
+    "sdio-host-0.9.0": {
+      "spdx": {
+        "commit": "ab9b0904b43db6f4b67431efd8821feb821f1c8b",
+        "ids": [
+          "MIT",
+          "Apache-2.0"
+        ]
+      },
+      "copyright": "Copyright (c) 2022 Johan Kristell, Richard Meadows",
+      "reconstructed": true,
+      "why": "sdio-host declares MIT OR Apache-2.0 in Cargo.toml, but neither the crate nor its repository (jkristell/sdio-host, at the recorded commit 4e1a67275a928be06fc7eb537a38f32bd45b5941 or later) has ever had a licence file. The texts are SPDX's; MIT's copyright line is reconstructed from Cargo.toml's authors and the crate's publish year (2022-07-27)."
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "crate": "void-1.0.2",
+  "reconstructed": true,
+  "why": "void declares MIT in Cargo.toml, but neither the crate nor its repository (reem/rust-void, tag 1.0.2 at ab2f4dbb7c95c144ccba2fa8afd11e155aa91133) has a licence file. The text is SPDX's; its copyright line is reconstructed from Cargo.toml's authors and the crate's publish year (2016-04-18).",
+  "files": [
+    {
+      "file": "MIT.txt",
+      "from": "https://raw.githubusercontent.com/spdx/license-list-data/ab9b0904b43db6f4b67431efd8821feb821f1c8b/text/MIT.txt",
+      "sha256": "c3d1fce2e2e914362bd438ee2aeedf561f8f8c8c66289fdea95d098cf68e55a7",
+      "note": "SPDX's standard text; no upstream licence file exists; the copyright line is reconstructed from Cargo.toml's authors and the publish year"
+    }
+  ]
+}

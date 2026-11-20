@@ -75,10 +75,10 @@ func TestManifestMatchesModule(t *testing.T) {
 }
 
 // The releases mirror-crates-* hold exactly the registry crates of
-// fw/Cargo.lock, with Cargo.lock's checksums, each copied from crates.io.
+// third_party/crates/Cargo.lock, with Cargo.lock's checksums, each copied from crates.io.
 func TestManifestMatchesCargoLock(t *testing.T) {
 	m := readManifest(t)
-	b, err := readRunfile("fw/Cargo.lock")
+	b, err := readRunfile("third_party/crates/Cargo.lock")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestManifestMatchesCargoLock(t *testing.T) {
 		url[name] = "https://static.crates.io/crates/" + field("name") + "/" + field("version") + "/download"
 	}
 	if len(locked) == 0 {
-		t.Fatal("fw/Cargo.lock has no registry crates")
+		t.Fatal("third_party/crates/Cargo.lock has no registry crates")
 	}
 	got := assets(t, m, func(tag string) bool { return strings.HasPrefix(tag, crateTags) })
 	for _, name := range keys(locked) {

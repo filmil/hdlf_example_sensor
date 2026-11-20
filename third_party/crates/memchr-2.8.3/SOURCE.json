@@ -1,0 +1,20 @@
+{
+  "crate": "memchr-2.8.3",
+  "files": [
+    {
+      "file": "COPYING",
+      "from": "the .crate",
+      "sha256": "01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f"
+    },
+    {
+      "file": "LICENSE-MIT",
+      "from": "the .crate",
+      "sha256": "0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f"
+    },
+    {
+      "file": "UNLICENSE",
+      "from": "the .crate",
+      "sha256": "7e12e5df4bae12cb21581ba157ced20e1986a0508dd10d0e8a4ab9a4cf94e85c"
+    }
+  ]
+}
