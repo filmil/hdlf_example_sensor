@@ -1,0 +1,11 @@
+{
+  "crate": "cordyceps-0.3.5",
+  "files": [
+    {
+      "file": "LICENSE",
+      "from": "the .crate",
+      "bytes": 1070,
+      "sha256": "d35f1d27734ebad4bd592c04709bb1fd666a0aeb65af5799fb911a55393bf362"
+    }
+  ]
+}

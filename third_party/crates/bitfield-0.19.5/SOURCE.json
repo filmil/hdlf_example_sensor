@@ -1,0 +1,17 @@
+{
+  "crate": "bitfield-0.19.5",
+  "files": [
+    {
+      "file": "LICENSE-APACHE",
+      "from": "the .crate",
+      "bytes": 11358,
+      "sha256": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08"
+    },
+    {
+      "file": "LICENSE-MIT",
+      "from": "the .crate",
+      "bytes": 1056,
+      "sha256": "af6b8d2c7ab89b819e3c2db77b572f145d14c8578dbd25015d739b30d4cc92f7"
+    }
+  ]
+}

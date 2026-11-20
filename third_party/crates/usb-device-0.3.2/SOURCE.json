@@ -1,0 +1,11 @@
+{
+  "crate": "usb-device-0.3.2",
+  "files": [
+    {
+      "file": "LICENSE",
+      "from": "the .crate",
+      "bytes": 1071,
+      "sha256": "afddff8c3601bc0f9329fe9a8159df16f1961633c1489f3bdcad007ad2a33c44"
+    }
+  ]
+}

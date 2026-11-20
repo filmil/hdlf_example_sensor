@@ -1,0 +1,17 @@
+{
+  "crate": "embedded-storage-async-0.4.2",
+  "files": [
+    {
+      "file": "LICENSE-APACHE",
+      "from": "the .crate",
+      "bytes": 11048,
+      "sha256": "7cfd738c53d61c79f07e348f622bf7707c9084237054d37fbe07788a75f5881c"
+    },
+    {
+      "file": "LICENSE-MIT",
+      "from": "the .crate",
+      "bytes": 1195,
+      "sha256": "92263ec879ad8c39c35bb09bf4c3c7061d155b8d143cf22c06babf0f7bbec54a"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "crate": "cortex-m-rt-macros-0.7.7",
+  "files": [
+    {
+      "file": "LICENSE-APACHE",
+      "from": "https://raw.githubusercontent.com/rust-embedded/cortex-m/f259e379457008329659c3b1207f61316c35b6f0/LICENSE-APACHE",
+      "bytes": 10847,
+      "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+    },
+    {
+      "file": "LICENSE-MIT",
+      "from": "https://raw.githubusercontent.com/rust-embedded/cortex-m/f259e379457008329659c3b1207f61316c35b6f0/LICENSE-MIT",
+      "bytes": 1128,
+      "sha256": "7f87ba0b3fab78d92c7d0517da93ac88110ebc02927dc8f802e2c1cb9632fe0a"
+    }
+  ]
+}

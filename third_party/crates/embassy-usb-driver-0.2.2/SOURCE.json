@@ -1,0 +1,17 @@
+{
+  "crate": "embassy-usb-driver-0.2.2",
+  "files": [
+    {
+      "file": "LICENSE-APACHE",
+      "from": "https://raw.githubusercontent.com/embassy-rs/embassy/664d4ead36bb24a63955ca649bcec66c6e70bf6d/LICENSE-APACHE",
+      "bytes": 10847,
+      "sha256": "64853d2f346cf20ad5a133c441e792d4b99b45adb2ef3acfa2b890d713e4ed0b"
+    },
+    {
+      "file": "LICENSE-MIT",
+      "from": "https://raw.githubusercontent.com/embassy-rs/embassy/664d4ead36bb24a63955ca649bcec66c6e70bf6d/LICENSE-MIT",
+      "bytes": 1067,
+      "sha256": "83d04e56c5beb631d65d6bd7b78c9350083084acc19753a3e6e1b68806a607f5"
+    }
+  ]
+}

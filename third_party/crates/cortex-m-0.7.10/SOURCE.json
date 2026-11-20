@@ -1,0 +1,17 @@
+{
+  "crate": "cortex-m-0.7.10",
+  "files": [
+    {
+      "file": "LICENSE-APACHE",
+      "from": "https://raw.githubusercontent.com/rust-embedded/cortex-m/b79801ce4884fe46105b562f701a7d2fd5c586c7/LICENSE-APACHE",
+      "bytes": 10847,
+      "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+    },
+    {
+      "file": "LICENSE-MIT",
+      "from": "https://raw.githubusercontent.com/rust-embedded/cortex-m/b79801ce4884fe46105b562f701a7d2fd5c586c7/LICENSE-MIT",
+      "bytes": 1128,
+      "sha256": "7f87ba0b3fab78d92c7d0517da93ac88110ebc02927dc8f802e2c1cb9632fe0a"
+    }
+  ]
+}

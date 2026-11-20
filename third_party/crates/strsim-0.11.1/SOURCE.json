@@ -1,0 +1,11 @@
+{
+  "crate": "strsim-0.11.1",
+  "files": [
+    {
+      "file": "LICENSE",
+      "from": "the .crate",
+      "bytes": 1166,
+      "sha256": "1e697ce8d21401fbf1bddd9b5c3fd4c4c79ae1e3bdf51f81761c85e11d5a89cd"
+    }
+  ]
+}

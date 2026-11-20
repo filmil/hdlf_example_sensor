@@ -1,0 +1,19 @@
+{
+  "crate": "stm32-metapac-21.0.0",
+  "reconstructed": true,
+  "why": "stm32-metapac 21.0.0 (2026-03-20) declares MIT OR Apache-2.0 but ships no licence file, and records no commit. stm32-data, which generates it, had no licence files then either (its release commit c05b9691035f8978090af617e20869b7302b069b). It added them on 2026-11-06, at this commit: the project's own text for the licence the crate already declared.",
+  "files": [
+    {
+      "file": "LICENSE-APACHE",
+      "from": "https://raw.githubusercontent.com/embassy-rs/stm32-data/cbf7e8c46096cc622104bd4876e6335491d2b4c0/LICENSE-APACHE",
+      "bytes": 10847,
+      "sha256": "64853d2f346cf20ad5a133c441e792d4b99b45adb2ef3acfa2b890d713e4ed0b"
+    },
+    {
+      "file": "LICENSE-MIT",
+      "from": "https://raw.githubusercontent.com/embassy-rs/stm32-data/cbf7e8c46096cc622104bd4876e6335491d2b4c0/LICENSE-MIT",
+      "bytes": 1067,
+      "sha256": "83d04e56c5beb631d65d6bd7b78c9350083084acc19753a3e6e1b68806a607f5"
+    }
+  ]
+}

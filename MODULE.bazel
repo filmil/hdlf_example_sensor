@@ -104,12 +104,15 @@ use_repo(rust, "rust_toolchains")
 register_toolchains("@rust_toolchains//:all")
 
 # The firmware's crates, pinned by Cargo.lock's checksums. To change them,
-# edit fw/Cargo.toml and run: CARGO_BAZEL_REPIN=1 bazel mod tidy
+# edit third_party/crates/Cargo.toml and run CARGO_BAZEL_REPIN=1 bazel mod
+# tidy; then bazel run //tools/crate_licences, update
+# third_party/crates/crate_licences.txt, and add an alias in
+# third_party/crates/BUILD.bazel for each new direct dependency.
 crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
 crate.from_cargo(
     name = "crates",
-    cargo_lockfile = "//fw:Cargo.lock",
-    manifests = ["//fw:Cargo.toml"],
+    cargo_lockfile = "//third_party/crates:Cargo.lock",
+    manifests = ["//third_party/crates:Cargo.toml"],
     supported_platform_triples = [
         "thumbv6m-none-eabi",
         "x86_64-unknown-linux-gnu",
@@ -138,7 +141,7 @@ filegroup(
     crate = "stm32-metapac",
     extra_aliased_targets = {"stm32-metapac-metadata": "chip_metadata"},
     patch_args = ["-p1"],
-    patches = ["//fw:stm32-metapac-device-x.patch"],
+    patches = ["//third_party/crates:stm32-metapac-device-x.patch"],
 )
 use_repo(crate, "crates")
 

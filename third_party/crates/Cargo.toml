@@ -9,9 +9,11 @@ version = "0.0.0"
 edition = "2024"
 publish = false
 
-[[bin]]
-name = "fw"
-path = "src/main.rs"
+# crate_universe needs a target to resolve dependencies for; this empty
+# library stands in for the firmware, so the manifest needs no file
+# outside this directory.
+[lib]
+path = "crates.rs"
 test = false
 bench = false
 

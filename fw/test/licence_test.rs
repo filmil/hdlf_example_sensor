@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Every registry crate of fw/Cargo.lock is in fw/crate_licences.txt, once,
+//! Every registry crate of third_party/crates/Cargo.lock is in third_party/crates/crate_licences.txt, once,
 //! at its version, and its licence expression offers a licence the project
 //! accepts. The expression is SPDX: AND binds tighter than OR, parentheses
 //! group, and "/" counts as OR, as old crates write it. An OR needs one

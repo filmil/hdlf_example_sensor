@@ -1,0 +1,131 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# The firmware's crates (issue #14): Cargo.toml and Cargo.lock, which
+# crate_universe pins them by (MODULE.bazel); crate_licences.txt, each
+# crate's SPDX licence; the stm32-metapac patch; and one directory per
+# locked crate, <name>-<version>/, with its LICENSE and SOURCE.json
+# (written by bazel run //tools/crate_licences).
+#
+# Targets depend on the aliases here, never on @crates directly. The aliases
+# are tagged manual, so a host build of //... skips them as it skipped
+# @crates: some (cortex-m, embassy-executor) build only for the firmware's
+# platform, though others are also used by host tests.
+load("@rules_python//python:py_test.bzl", "py_test")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "README.md",
+    "Cargo.lock",
+    "Cargo.toml",
+    "crate_licences.txt",
+    "stm32-metapac-device-x.patch",
+])
+
+# Every crate of Cargo.lock has its directory, and no other crate does:
+# SOURCE.json lists its files, LICENSE is exactly those files (each one's
+# length and sha256 checked), and README.md names the reconstructed ones.
+py_test(
+    name = "licence_dirs_test",
+    srcs = ["licence_dirs_test.py"],
+    data = glob(["*/*"]) + [
+        "Cargo.lock",
+        "README.md",
+    ],
+    env = {
+        "CARGO_LOCK": "$(rootpath Cargo.lock)",
+        "README": "$(rootpath README.md)",
+    },
+    main = "licence_dirs_test.py",
+    deps = ["//tools/crate_licences:check"],
+)
+
+alias(
+    name = "cortex-m",
+    actual = "@crates//:cortex-m",
+    tags = ["manual"],
+)
+
+alias(
+    name = "cortex-m-rt",
+    actual = "@crates//:cortex-m-rt",
+    tags = ["manual"],
+)
+
+alias(
+    name = "embassy-executor",
+    actual = "@crates//:embassy-executor",
+    tags = ["manual"],
+)
+
+alias(
+    name = "embassy-futures",
+    actual = "@crates//:embassy-futures",
+    tags = ["manual"],
+)
+
+alias(
+    name = "embassy-stm32",
+    actual = "@crates//:embassy-stm32",
+    tags = ["manual"],
+)
+
+alias(
+    name = "embassy-sync",
+    actual = "@crates//:embassy-sync",
+    tags = ["manual"],
+)
+
+alias(
+    name = "embassy-time",
+    actual = "@crates//:embassy-time",
+    tags = ["manual"],
+)
+
+alias(
+    name = "embassy-usb",
+    actual = "@crates//:embassy-usb",
+    tags = ["manual"],
+)
+
+alias(
+    name = "embedded-hal",
+    actual = "@crates//:embedded-hal",
+    tags = ["manual"],
+)
+
+alias(
+    name = "embedded-hal-async",
+    actual = "@crates//:embedded-hal-async",
+    tags = ["manual"],
+)
+
+alias(
+    name = "heapless",
+    actual = "@crates//:heapless",
+    tags = ["manual"],
+)
+
+alias(
+    name = "panic-halt",
+    actual = "@crates//:panic-halt",
+    tags = ["manual"],
+)
+
+alias(
+    name = "static_cell",
+    actual = "@crates//:static_cell",
+    tags = ["manual"],
+)
+
+alias(
+    name = "stm32-metapac",
+    actual = "@crates//:stm32-metapac",
+    tags = ["manual"],
+)
+
+alias(
+    name = "stm32-metapac-metadata",
+    actual = "@crates//:stm32-metapac-metadata",
+    tags = ["manual"],
+)

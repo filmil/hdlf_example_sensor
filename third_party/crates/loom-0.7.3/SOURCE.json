@@ -1,0 +1,11 @@
+{
+  "crate": "loom-0.7.3",
+  "files": [
+    {
+      "file": "LICENSE",
+      "from": "the .crate",
+      "bytes": 1055,
+      "sha256": "8ce0830173fdac609dfb4ea603fdc002c2f4af0dc9b1a005653f5da9cf534b18"
+    }
+  ]
+}

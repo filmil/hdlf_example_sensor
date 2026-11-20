@@ -1,0 +1,17 @@
+{
+  "crate": "embedded-hal-0.2.7",
+  "files": [
+    {
+      "file": "LICENSE-APACHE",
+      "from": "the .crate",
+      "bytes": 10847,
+      "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+    },
+    {
+      "file": "LICENSE-MIT",
+      "from": "the .crate",
+      "bytes": 1063,
+      "sha256": "520bc4942f199aad3dfe939c475d67ffbddfea482e41fc4fcad8829b71affc99"
+    }
+  ]
+}
