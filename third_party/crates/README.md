@@ -16,14 +16,17 @@ sha256. Targets depend on the aliases in `BUILD.bazel`
   - `SOURCE.json`: each file's origin and sha256.
 
 `bazel run //tools/crate_licences` writes those directories. Run it by
-hand after `Cargo.lock` changes; `//fw:licence_test` fails until you do.
-Of the 132 crates, 104 ship their licence files in the `.crate`. 25,
-mostly cortex-m and embassy, keep them at their repository's root, so
-they come from the repository at the commit the crate recorded.
+hand after `Cargo.lock` changes; `:licence_dirs_test` fails until you
+do, and also if a directory's `LICENSE` differs by a byte from what its
+`SOURCE.json` records. Most crates ship their licence files in the
+`.crate`. Others, mostly cortex-m and embassy, keep them at their
+repository's root, so they come from the repository at the commit the
+crate recorded.
 
 Three crates have no licence file upstream, only the licence their
 `Cargo.toml` declares, so theirs are reconstructed. Their `SOURCE.json`
-says `"reconstructed": true` and why; the pins are in
+says `"reconstructed": true` and why, and `:licence_dirs_test` checks
+that this table names each of them. The pins are in
 `tools/crate_licences/pins.json`, by full commit SHA:
 
 | Crate | Declares | Licence files |

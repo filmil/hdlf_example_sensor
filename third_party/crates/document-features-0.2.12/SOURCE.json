@@ -4,11 +4,13 @@
     {
       "file": "LICENSE-APACHE",
       "from": "the .crate",
+      "bytes": 10280,
       "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff"
     },
     {
       "file": "LICENSE-MIT",
       "from": "the .crate",
+      "bytes": 1082,
       "sha256": "aa893340d14b9844625be6a50ac644169a01b52f0211cbf81b09e1874c8cd81d"
     }
   ]

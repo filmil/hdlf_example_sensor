@@ -4,11 +4,13 @@
     {
       "file": "LICENSE-APACHE",
       "from": "https://raw.githubusercontent.com/rust-embedded-community/embedded-storage/e1dc3560e8890e6e70d726572fad5d8effb8e8ab/LICENSE-APACHE",
+      "bytes": 10847,
       "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
     },
     {
       "file": "LICENSE-MIT",
       "from": "https://raw.githubusercontent.com/rust-embedded-community/embedded-storage/e1dc3560e8890e6e70d726572fad5d8effb8e8ab/LICENSE-MIT",
+      "bytes": 1144,
       "sha256": "defe476501aa348fd6c93790a8921ce76de31486993aeaef32ac7d1b1ca35bbe"
     }
   ]

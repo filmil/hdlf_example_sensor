@@ -4,11 +4,13 @@
     {
       "file": "LICENSE-APACHE",
       "from": "https://raw.githubusercontent.com/embassy-rs/embassy/ca966f8ff4ee81c14bccade56b7a52c1fc154e26/LICENSE-APACHE",
+      "bytes": 10847,
       "sha256": "64853d2f346cf20ad5a133c441e792d4b99b45adb2ef3acfa2b890d713e4ed0b"
     },
     {
       "file": "LICENSE-MIT",
       "from": "https://raw.githubusercontent.com/embassy-rs/embassy/ca966f8ff4ee81c14bccade56b7a52c1fc154e26/LICENSE-MIT",
+      "bytes": 1067,
       "sha256": "83d04e56c5beb631d65d6bd7b78c9350083084acc19753a3e6e1b68806a607f5"
     }
   ]

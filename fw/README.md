@@ -58,8 +58,9 @@ bazel test //fw/...
   licence files (`LICENSE`) and where each came from (`SOURCE.json`).
   To change the crates, edit `third_party/crates/Cargo.toml`, run
   `CARGO_BAZEL_REPIN=1 bazel mod tidy`, then `bazel run
-  //tools/crate_licences` to refresh the licence directories, and update
-  `crate_licences.txt`.
+  //tools/crate_licences` to refresh the licence directories, update
+  `third_party/crates/crate_licences.txt`, and add an alias in
+  `third_party/crates/BUILD.bazel` for each new direct dependency.
 - **`:fw`** is `fw.elf`: the `firmware` rule (`firmware.bzl`) builds
   `:fw_code` and every crate under it for the platform `:stm32f042`, in
   opt mode, with fat LTO, `opt-level=z`, one codegen unit and
@@ -82,14 +83,17 @@ directory, which the link step does see.
 |---|---|
 | `:budget_test` | The ELF fits 32 KB of flash and 6 KB of RAM with at least 1 KB left for the stack, and prints the margin. The same firmware on a chip one byte too small, in flash or in RAM, must fail. The vector table is sound, and `fw.bin` is the ELF's image. |
 | `:fw_determinism_test` | The ELF and `fw.bin` are the same bytes from two configurations. |
-| `:licence_test` | Every crate of `Cargo.lock` has its directory under `//third_party/crates`, with a `LICENSE` that holds every file its `SOURCE.json` lists, and is in `crate_licences.txt`, once, at its version, and its SPDX expression offers MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause or Zlib. The one exception is unicode-ident: it is `(MIT OR Apache-2.0) AND Unicode-3.0`, and accepted because it only runs on the build machine, inside proc macros. |
+| `:licence_test` | Every crate of `Cargo.lock` is in `third_party/crates/crate_licences.txt`, once, at its version, and its SPDX expression offers MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause or Zlib. The one exception is unicode-ident: it is `(MIT OR Apache-2.0) AND Unicode-3.0`, and accepted because it only runs on the build machine, inside proc macros. |
 | `tools:elf_test` | The ELF reader, on small ELF files the test writes byte by byte, malformed ones included. |
 | `:pinmap_test`, `:pins_test` | The pin map: see below. |
 | `:hdc2080_test` | The sensor's driver: see below. |
 
-`crate_licences.txt` holds the `license` of each crate's own
+`third_party/crates/crate_licences.txt` holds the `license` of each crate's own
 `Cargo.toml`. A change to `Cargo.lock` must update it and the licence
-directories (`bazel run //tools/crate_licences`), or the test fails.
+directories (`bazel run //tools/crate_licences`), or the tests fail:
+`//third_party/crates:licence_dirs_test` checks that each locked crate,
+and no other, has its directory, with a `LICENSE` that is byte for byte
+the files its `SOURCE.json` lists.
 Most crates ship their licence files; those that do not (cortex-m and the
 embassy crates keep them at their repository's root) get them from their
 repository at the commit the crate recorded, or one pinned by full SHA in

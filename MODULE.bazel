@@ -105,7 +105,9 @@ register_toolchains("@rust_toolchains//:all")
 
 # The firmware's crates, pinned by Cargo.lock's checksums. To change them,
 # edit third_party/crates/Cargo.toml and run CARGO_BAZEL_REPIN=1 bazel mod
-# tidy, then bazel run //tools/crate_licences.
+# tidy; then bazel run //tools/crate_licences, update
+# third_party/crates/crate_licences.txt, and add an alias in
+# third_party/crates/BUILD.bazel for each new direct dependency.
 crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
 crate.from_cargo(
     name = "crates",

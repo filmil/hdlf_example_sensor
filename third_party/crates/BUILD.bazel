@@ -7,8 +7,11 @@
 # (written by bazel run //tools/crate_licences).
 #
 # Targets depend on the aliases here, never on @crates directly. The aliases
-# are tagged manual: the crates build only for the firmware's platform, so
-# a host build of //... must skip them, as it skipped @crates.
+# are tagged manual, so a host build of //... skips them as it skipped
+# @crates: some (cortex-m, embassy-executor) build only for the firmware's
+# platform, though others are also used by host tests.
+load("@rules_python//python:py_test.bzl", "py_test")
+
 package(default_visibility = ["//visibility:public"])
 
 exports_files([
@@ -19,13 +22,22 @@ exports_files([
     "stm32-metapac-device-x.patch",
 ])
 
-# Every crate's LICENSE and SOURCE.json, for //fw:licence_test.
-filegroup(
-    name = "crate_licence_files",
-    srcs = glob([
-        "*/LICENSE",
-        "*/SOURCE.json",
-    ]),
+# Every crate of Cargo.lock has its directory, and no other crate does:
+# SOURCE.json lists its files, LICENSE is exactly those files (each one's
+# length and sha256 checked), and README.md names the reconstructed ones.
+py_test(
+    name = "licence_dirs_test",
+    srcs = ["licence_dirs_test.py"],
+    data = glob(["*/*"]) + [
+        "Cargo.lock",
+        "README.md",
+    ],
+    env = {
+        "CARGO_LOCK": "$(rootpath Cargo.lock)",
+        "README": "$(rootpath README.md)",
+    },
+    main = "licence_dirs_test.py",
+    deps = ["//tools/crate_licences:check"],
 )
 
 alias(

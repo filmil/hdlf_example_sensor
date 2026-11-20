@@ -1,14 +1,35 @@
 # SPDX-License-Identifier: Apache-2.0
 load("@rules_python//python:py_binary.bzl", "py_binary")
+load("@rules_python//python:py_library.bzl", "py_library")
+load("@rules_python//python:py_test.bzl", "py_test")
 
 # bazel run //tools/crate_licences: writes //third_party/crates/<crate>/
 # (LICENSE and SOURCE.json) for every crate of Cargo.lock, from the .crate
 # or from upstream at a recorded or pinned commit (pins.json). By hand
 # only, after Cargo.lock changes: it fetches from the network, so no build
-# or test runs it. //fw:licence_test checks what it wrote.
+# or test runs it. //third_party/crates:licence_dirs_test checks what it
+# wrote.
 py_binary(
     name = "crate_licences",
     srcs = ["crate_licences.py"],
     data = ["pins.json"],
     main = "crate_licences.py",
+    deps = [":check"],
+)
+
+# The checks on what crate_licences writes; licence_dirs_test runs them.
+py_library(
+    name = "check",
+    srcs = ["check.py"],
+    visibility = ["//third_party/crates:__pkg__"],
+)
+
+py_test(
+    name = "check_test",
+    srcs = [
+        "check_test.py",
+        "crate_licences.py",
+    ],
+    main = "check_test.py",
+    deps = [":check"],
 )

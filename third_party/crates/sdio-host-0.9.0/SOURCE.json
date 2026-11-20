@@ -6,12 +6,14 @@
     {
       "file": "MIT.txt",
       "from": "https://raw.githubusercontent.com/spdx/license-list-data/ab9b0904b43db6f4b67431efd8821feb821f1c8b/text/MIT.txt",
+      "bytes": 1088,
       "sha256": "91e09fbfffda86b7981111592ccf166dcea602662c2c1fe1bf82819d2f9ecd68",
       "note": "SPDX's standard text; no upstream licence file exists; the copyright line is reconstructed from Cargo.toml's authors and the publish year"
     },
     {
       "file": "Apache-2.0.txt",
       "from": "https://raw.githubusercontent.com/spdx/license-list-data/ab9b0904b43db6f4b67431efd8821feb821f1c8b/text/Apache-2.0.txt",
+      "bytes": 10280,
       "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
       "note": "SPDX's standard text; no upstream licence file exists"
     }

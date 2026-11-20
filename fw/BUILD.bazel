@@ -87,15 +87,14 @@ rust_test(
     deps = ["//fw/tools:elf"],
 )
 
-# Every crate in Cargo.lock has an allowed licence, and its directory under
-# //third_party/crates with LICENSE and SOURCE.json.
+# Every crate in Cargo.lock has an allowed licence. Its licence files are
+# checked by //third_party/crates:licence_dirs_test.
 rust_test(
     name = "licence_test",
     size = "small",
     srcs = ["test/licence_test.rs"],
     data = [
         "//third_party/crates:Cargo.lock",
-        "//third_party/crates:crate_licence_files",
         "//third_party/crates:crate_licences.txt",
     ],
     env = {

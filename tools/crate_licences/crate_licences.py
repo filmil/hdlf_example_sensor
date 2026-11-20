@@ -6,7 +6,7 @@ and SOURCE.json, where each came from and its sha256.
     bazel run //tools/crate_licences
 
 Run it by hand, after Cargo.lock changes; it fetches from the network, so no
-build or test runs it. //fw:licence_test checks what it wrote.
+build or test runs it. //third_party/crates:licence_dirs_test checks what it wrote.
 
 A crate's licence files come from its .crate, checked against Cargo.lock's
 checksum, when it ships any. Many workspace crates (cortex-m, embassy) do
@@ -33,22 +33,12 @@ import tomllib
 import urllib.error
 import urllib.request
 
+from tools.crate_licences import check
+
 UA = {"User-Agent": "hdlf-example-sensor-crate-licences"}
 NAMES = ["LICENSE", "LICENSE-APACHE", "LICENSE-MIT", "LICENSE.md", "LICENSE.txt", "LICENSE-APACHE.md",
          "LICENSE-MIT.md", "LICENCE", "COPYING", "UNLICENSE", "COPYRIGHT", "NOTICE"]
 LICENCE_FILE = re.compile(r"^(licen[cs]e|copying|unlicense|copyright|notice)", re.I)
-
-
-def locked(lock_text):
-    """[(name, version, checksum)] of a Cargo.lock's registry packages."""
-    out = []
-    for block in lock_text.split("[[package]]")[1:]:
-        def field(k):
-            m = re.search(r'(?m)^' + k + r' = "([^"]+)"', block)
-            return m.group(1) if m else None
-        if field("source"):
-            out.append((field("name"), field("version"), field("checksum")))
-    return out
 
 
 def sha256(b):
@@ -129,14 +119,20 @@ def spdx_texts(pin):
 
 
 def render(parts):
-    """LICENSE: each file verbatim, after a line naming it and its origin."""
-    out = []
+    """LICENSE and SOURCE.json's file list. LICENSE holds each file's bytes
+    verbatim, after a header line naming it and its origin and before a
+    newline; SOURCE.json records each one's length and sha256, so
+    check.py can take LICENSE apart exactly."""
+    out, files = [], []
     for p in parts:
-        out.append("==> %s (%s) <==\n" % (p["file"], p["from"]))
-        text = p["bytes"].decode("utf-8", "replace")
-        out.append(text if text.endswith("\n") else text + "\n")
-        out.append("\n")
-    return "".join(out)
+        out.append(check.header(p["file"], p["from"]))
+        out.append(p["bytes"])
+        out.append(b"\n")
+        f = {"file": p["file"], "from": p["from"], "bytes": len(p["bytes"]), "sha256": sha256(p["bytes"])}
+        if "note" in p:
+            f["note"] = p["note"]
+        files.append(f)
+    return b"".join(out), files
 
 
 def main(argv):
@@ -146,7 +142,7 @@ def main(argv):
     lock = open(os.path.join(a.root, "third_party/crates/Cargo.lock")).read()
     pins = json.load(open(os.path.join(a.root, "tools/crate_licences/pins.json")))["crates"]
     problems = []
-    for name, version, checksum in locked(lock):
+    for name, version, checksum in check.locked(lock):
         key = "%s-%s" % (name, version)
         data = get("https://static.crates.io/crates/%s/%s/download" % (name, version))
         if sha256(data) != checksum:
@@ -179,22 +175,22 @@ def main(argv):
                 parts.append({"file": f, "from": found[f][0], "bytes": found[f][1]})
         out = os.path.join(a.root, "third_party/crates", key)
         os.makedirs(out, exist_ok=True)
-        with open(os.path.join(out, "LICENSE"), "w") as fh:
-            fh.write(render(parts))
+        licence, files = render(parts)
+        with open(os.path.join(out, "LICENSE"), "wb") as fh:
+            fh.write(licence)
         with open(os.path.join(out, "SOURCE.json"), "w") as fh:
             source = {"crate": key}
             if key in pins:
                 source["reconstructed"] = bool(pins[key].get("reconstructed"))
                 source["why"] = pins[key]["why"]
-            source["files"] = []
-            for p in parts:
-                f = {"file": p["file"], "from": p["from"], "sha256": sha256(p["bytes"])}
-                if "note" in p:
-                    f["note"] = p["note"]
-                source["files"].append(f)
+            source["files"] = files
             json.dump(source, fh, indent=2)
             fh.write("\n")
         print("%s: %s" % (key, ", ".join("%s from %s" % (p["file"], "the .crate" if p["from"] == "the .crate" else "upstream") for p in parts)))
+    wanted = {"%s-%s" % (n, v) for n, v, _ in check.locked(lock)}
+    crates_dir = os.path.join(a.root, "third_party/crates")
+    for stale in sorted(set(check.crate_dirs(crates_dir)) - wanted):
+        print("%s: no longer in Cargo.lock; delete its directory" % stale)
     if problems:
         sys.stderr.write("crate_licences:\n  " + "\n  ".join(problems) + "\n")
         return 1
