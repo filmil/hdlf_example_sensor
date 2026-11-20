@@ -81,7 +81,7 @@ directory, which the link step does see.
 
 | Test | Checks |
 |---|---|
-| `:budget_test` | The ELF fits 32 KB of flash and 6 KB of RAM with at least 1 KB left for the stack, and prints the margin. Its use is exactly the one recorded in the test (`RECORDED`), so a change that grows or shrinks the firmware must update it, and its diff shows by how much. It leaves headroom: flash at most 90 % of the chip, and at least 2 KB for the stack. The same firmware on a chip one byte too small, in flash or in RAM, must fail. The vector table is sound, and `fw.bin` is the ELF's image. |
+| `:budget_test` | The ELF fits 32 KB of flash and 6 KB of RAM with at least 1 KB left for the stack, and prints the margin. Its use is exactly the one recorded in the test (`RECORDED`), so a change that grows or shrinks the firmware must update it, and its diff shows by how much. It leaves headroom: flash at most 90 % of the chip, and at least 2 KB of RAM free for the stack. A change that needs the reserve raises the cap in the test, in the same PR, with the reason. The same firmware on a chip one byte too small, in flash or in RAM, must fail. The vector table is sound, and `fw.bin` is the ELF's image. |
 | `:fw_determinism_test` | The ELF and `fw.bin` are the same bytes from two configurations. |
 | `:licence_test` | Every crate of `Cargo.lock` is in `third_party/crates/crate_licences.txt`, once, at its version, and its SPDX expression offers MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause or Zlib. The one exception is unicode-ident: it is `(MIT OR Apache-2.0) AND Unicode-3.0`, and accepted because it only runs on the build machine, inside proc macros. |
 | `tools:elf_test` | The ELF reader, on small ELF files the test writes byte by byte, malformed ones included. |
