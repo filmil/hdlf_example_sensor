@@ -322,8 +322,40 @@ def rust(chosen):
     return "\n".join(lines) + "\n"
 
 
-def run(netlist, symbols, metadata_files, spec):
-    """Returns (pins.rs text or None, [problem])."""
+def tsv(spec, nets, names, chosen):
+    """The pinout as a table, for the book: one row per pin of the chip,
+    tab-separated, with a header. pin: its number; name: the symbol's
+    name for it; net: the board's net on it ("" when none); port: the port
+    pin the firmware uses ("" for pins it does not drive); function: what
+    pins.json asks of it (gpio, a peripheral signal, or the fixed pin it
+    must be); af: the alternate function, when there is one."""
+    on_pin = {}
+    for net, pins in nets.items():
+        if net.startswith("unconnected-"):
+            continue
+        for p in pins:
+            on_pin.setdefault(p, []).append(net)
+    used = {c[3]: (net, c) for net, c in chosen.items()}
+    rows = ["pin\tname\tnet\tport\tfunction\taf"]
+    for pin in sorted(names, key=lambda p: (len(p), p)):
+        port = function = af = ""
+        if pin in used:
+            net, (port, a, _, _) = used[pin]
+            want = spec["nets"][net]
+            if "pin" in want:
+                function = "pin " + want["pin"]
+            elif want.get("gpio"):
+                function = "gpio"
+            else:
+                function = "%s %s" % (want["peripheral"], want["signal"])
+            af = "" if a is None else str(a)
+        rows.append("\t".join([pin, names[pin], ",".join(sorted(on_pin.get(pin, []))), port, function, af]))
+    return "\n".join(rows) + "\n"
+
+
+def run(netlist, symbols, metadata_files, spec, fmt="rust"):
+    """Returns (pins.rs text, or the pinout table when fmt is "tsv", or
+    None; [problem])."""
     problems = check_spec(spec)
     if problems:
         return None, problems
@@ -337,14 +369,13 @@ def run(netlist, symbols, metadata_files, spec):
         problems.append("--symbols is %s, the netlist's library is %s" % (lib_file, part["lib"]))
     if problems:
         return None, problems
-    chosen, problems = resolve(
-        spec,
-        netlist_nets(netlist[1], ref),
-        symbol_pins(symbols[1], part["symbol"]),
-        *metadata(metadata_files, spec["chip"]),
-    )
+    nets = netlist_nets(netlist[1], ref)
+    names = symbol_pins(symbols[1], part["symbol"])
+    chosen, problems = resolve(spec, nets, names, *metadata(metadata_files, spec["chip"]))
     if problems:
         return None, problems
+    if fmt == "tsv":
+        return tsv(spec, nets, names, chosen), []
     return rust(chosen), []
 
 
@@ -355,6 +386,8 @@ def main(argv):
     ap.add_argument("--metadata", action="append", required=True)
     ap.add_argument("--spec", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--format", choices=["rust", "tsv"], default="rust",
+                    help="rust: pins.rs; tsv: the pinout table, from the same checks")
     a = ap.parse_args(argv)
 
     def read(p):
@@ -367,6 +400,7 @@ def main(argv):
             (a.symbols, read(a.symbols)),
             {m: read(m) for m in a.metadata},
             json.loads(read(a.spec)),
+            a.format,
         )
     except ValueError as e:
         out, problems = None, [str(e)]

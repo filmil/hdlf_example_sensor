@@ -23,3 +23,11 @@ rust_binary(
     srcs = ["elf2bin.rs"],
     deps = [":elf"],
 )
+
+# fw_tables ELF BUDGET MEMMAP: the budget and the memory map as tables,
+# for the book (//fw:budget_tsv, //fw:memmap_tsv).
+rust_binary(
+    name = "fw_tables",
+    srcs = ["fw_tables.rs"],
+    deps = [":elf"],
+)

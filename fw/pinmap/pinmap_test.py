@@ -77,6 +77,24 @@ class PinmapTest(unittest.TestCase):
         self.assertIn("pub const USB_DP: Pin = Pin { port: 'A', number: 12 };", out)
         self.assertIn("#![no_std]", out)
 
+    def test_the_pinout_table(self):
+        try:
+            out, problems = pinmap.run(
+                (ARGS.netlist, self.netlist), (ARGS.symbols, self.symbols), self.meta, self.spec, "tsv")
+        except ValueError as e:
+            out, problems = None, [str(e)]
+        self.assertEqual(problems, [])
+        rows = [r.split("\t") for r in out.splitlines()]
+        self.assertEqual(rows[0], ["pin", "name", "net", "port", "function", "af"])
+        self.assertEqual([r[0] for r in rows[1:]], [str(n) for n in range(1, 21)])
+        by_net = {r[2]: r for r in rows[1:]}
+        self.assertEqual(by_net["I2C_SDA"][3:], ["PF0", "I2C1 SDA", "1"])
+        self.assertEqual(by_net["USB_DP"][3:], ["PA12", "USB DP", ""])
+        self.assertEqual(by_net["LED"][4:], ["gpio", ""])
+        self.assertEqual(by_net["BOOT0"][3:5], ["PB8", "pin PB8"])
+        # A pin the firmware does not drive has no port or function.
+        self.assertTrue(any(r[3] == "" and r[2] for r in rows[1:]), "no power or other pin")
+
     # Nets on the wrong pins.
 
     def test_sda_on_a_pin_without_i2c(self):

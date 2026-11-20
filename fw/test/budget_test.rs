@@ -29,11 +29,12 @@
 /// The use when it was last recorded, in bytes.
 const RECORDED: elf::Usage = elf::Usage { flash: 24112, ram: 2228 };
 
-/// Flash use at most this percentage of the chip.
-const FLASH_MAX_PERCENT: u64 = 90;
+/// Flash use at most this percentage of the chip (elf.rs, so the book's
+/// budget table has the same).
+const FLASH_MAX_PERCENT: u64 = elf::FLASH_MAX_PERCENT;
 
 /// RAM left free for the stack: at least this many bytes.
-const STACK_MIN_FREE: u64 = 2 * 1024;
+const STACK_MIN_FREE: u64 = elf::STACK_MIN_FREE;
 
 /// Checks u against the headroom on m: a line with the margins, or an
 /// error naming what is over.
@@ -157,4 +158,65 @@ fn fw_bin_is_the_image() {
     let (d, e) = firmware();
     let img = elf::image(&d, &e, &elf::STM32F042F6).expect("image");
     assert_eq!(read("FW_BIN"), img, "fw.bin is not the ELF's image");
+}
+
+/// The rows of a table the book draws, without its header.
+fn table(var: &str) -> Vec<Vec<String>> {
+    let text = String::from_utf8(read(var)).expect("UTF-8");
+    let mut lines = text.lines();
+    lines.next().expect("a header");
+    lines.map(|l| l.split('\t').map(String::from).collect()).collect()
+}
+
+/// //fw:budget_tsv has this test's numbers: the use, the chip, the cap and
+/// the stack reserve.
+#[test]
+fn the_budget_table_agrees() {
+    let (d, e) = firmware();
+    let m = &elf::STM32F042F6;
+    let u = elf::usage(&d, &e, m).expect("usage");
+    let got: Vec<(String, u64)> = table("BUDGET_TSV").into_iter().map(|r| (r[0].clone(), r[1].parse().expect("a number"))).collect();
+    let want: Vec<(String, u64)> = [
+        ("flash_size", m.flash_size as u64),
+        ("flash_used", u.flash),
+        ("flash_max_percent", FLASH_MAX_PERCENT),
+        ("flash_cap", m.flash_size as u64 * FLASH_MAX_PERCENT / 100),
+        ("ram_size", m.ram_size as u64),
+        ("ram_used", u.ram),
+        ("stack_min", m.stack_min as u64),
+        ("stack_min_free", STACK_MIN_FREE),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v))
+    .collect();
+    assert_eq!(got, want);
+}
+
+/// //fw:memmap_tsv's blocks do not overlap, lie in their region, and end
+/// where the budget's use does: the flash blocks at the image's end, the
+/// RAM blocks at the end of the last RAM section.
+#[test]
+fn the_memory_map_agrees() {
+    let (d, e) = firmware();
+    let m = &elf::STM32F042F6;
+    let u = elf::usage(&d, &e, m).expect("usage");
+    let rows = table("MEMMAP_TSV");
+    let mut last = (0u64, 0u64);
+    let mut ends = (m.flash_start as u64, m.ram_start as u64);
+    for r in &rows {
+        let start = u64::from_str_radix(r[2].trim_start_matches("0x"), 16).expect("a hex start");
+        let size: u64 = r[3].parse().expect("a size");
+        let (base, cell) = match r[1].as_str() {
+            "flash" => (m.flash_start as u64, &mut ends.0),
+            "ram" => (m.ram_start as u64, &mut ends.1),
+            other => panic!("region {}", other),
+        };
+        assert!(start >= base, "{} starts before its region", r[0]);
+        assert!(start >= last.0 + last.1 || last == (0, 0), "{} overlaps the block before it", r[0]);
+        last = (start, size);
+        *cell = (*cell).max(start + size);
+    }
+    assert_eq!(ends.0 - m.flash_start as u64, u.flash, "the flash blocks end elsewhere than the image");
+    assert_eq!(ends.1 - m.ram_start as u64, u.ram, "the RAM blocks end elsewhere than the RAM use");
+    assert!(rows.iter().any(|r| r[0] == ".text"), "no .text");
 }

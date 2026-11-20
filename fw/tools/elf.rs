@@ -223,3 +223,59 @@ pub fn check(u: &Usage, mem: &Memory) -> Result<String, String> {
     }
     Ok(line)
 }
+
+/// The headroom budget_test keeps on the chip, and the book's budget
+/// figure draws: flash use at most this percentage of the chip.
+pub const FLASH_MAX_PERCENT: u64 = 90;
+
+/// The headroom's other half: RAM left free for the stack, in bytes.
+pub const STACK_MIN_FREE: u64 = 2 * 1024;
+
+/// One block of the memory map: an allocated section, or the part of the
+/// flash image past the last flash section (the initial values of RAM
+/// sections such as .data, which the startup code copies to RAM).
+#[derive(Debug, PartialEq)]
+pub struct Block {
+    pub name: String,
+    /// "flash" or "ram".
+    pub region: &'static str,
+    pub start: u32,
+    pub size: u32,
+}
+
+/// The name of the block of the image past the last flash section.
+pub const LOAD_IMAGE: &str = "(initial values of RAM sections)";
+
+/// The firmware's memory map, by address: each allocated section that is
+/// not empty, in flash or in RAM, then the rest of the flash image, so
+/// that the flash blocks end where usage().flash does, and the RAM blocks
+/// where usage().ram does.
+pub fn memory_map(d: &[u8], elf: &Elf, mem: &Memory) -> Result<Vec<Block>, String> {
+    let flash_end = end(mem.flash_start, mem.flash_size)?;
+    let mut out = Vec::new();
+    for s in elf.sections.iter().filter(|s| s.flags & SHF_ALLOC != 0 && s.size > 0) {
+        let a = s.addr as u64;
+        let region = if a >= mem.flash_start as u64 && a < flash_end {
+            "flash"
+        } else if a >= mem.ram_start as u64 && a < mem.ram_start as u64 + (1 << 28) {
+            "ram"
+        } else {
+            return Err(format!("section {} at {:#010x} is neither in flash nor in RAM", s.name, s.addr));
+        };
+        out.push(Block { name: s.name.clone(), region, start: s.addr, size: s.size });
+    }
+    out.sort_by_key(|b| b.start);
+    let image = image(d, elf, mem)?.len() as u64;
+    let sections_end = out
+        .iter()
+        .filter(|b| b.region == "flash")
+        .map(|b| b.start as u64 + b.size as u64)
+        .max()
+        .unwrap_or(mem.flash_start as u64);
+    let image_end = mem.flash_start as u64 + image;
+    if image_end > sections_end {
+        out.push(Block { name: LOAD_IMAGE.into(), region: "flash", start: sections_end as u32, size: (image_end - sections_end) as u32 });
+        out.sort_by_key(|b| b.start);
+    }
+    Ok(out)
+}
