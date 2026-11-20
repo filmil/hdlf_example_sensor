@@ -10,6 +10,12 @@ package(default_visibility = ["//visibility:public"])
 
 licenses(["restricted"])
 
+# The .torrent published next to our copy of dfu-util's source tarball, at
+# DfuUtil.URL in //tools/dfu_util (bt.hdlfactory.com's layout: one
+# web-seeded .torrent beside each file; fw/README.md says how it is made
+# and published).
+exports_files(["dfu-util-0.11.tar.gz.torrent"])
+
 # Manual, like //fw:flash: //... does not fetch the binary. The binary is
 # x86_64 Linux only.
 alias(

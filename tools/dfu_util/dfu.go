@@ -35,6 +35,9 @@ const AptSnapshot = "20261117T000000Z"
 type Input struct {
 	URL    string
 	SHA256 string
+	// Fallbacks serve the same bytes as URL; build.sh tries each, in
+	// order, when the download before it fails.
+	Fallbacks []string
 }
 
 // LibUSB is libusb 1.0.30's release tarball; GitHub's release lists its
@@ -46,10 +49,20 @@ var LibUSB = Input{
 
 // DfuUtil is dfu-util 0.11's release tarball; it matches the MD5 the
 // project publishes beside it (31c983543a1fe8f03260ca4d56ad4f43).
+// SourceForge, where the project publishes it, refuses some clients (403
+// to tools/mirror), so the first URL is our copy on bt.hdlfactory.com,
+// with SourceForge and Ubuntu's copy of the same bytes after it.
 var DfuUtil = Input{
-	URL:    "https://dfu-util.sourceforge.net/releases/dfu-util-0.11.tar.gz",
+	URL:    "https://bt.hdlfactory.com/dfu-util/0.11/dfu-util-0.11.tar.gz",
 	SHA256: "b4b53ba21a82ef7e3d4c47df2952adf5fa494f499b6b0b57c58c5d04ae8ff19e",
+	Fallbacks: []string{
+		"https://dfu-util.sourceforge.net/releases/dfu-util-0.11.tar.gz",
+		"https://snapshot.ubuntu.com/ubuntu/20261117T000000Z/pool/universe/d/dfu-util/dfu-util_0.11.orig.tar.gz",
+	},
 }
+
+// DfuUtilSize is the length of dfu-util 0.11's tarball, in bytes.
+const DfuUtilSize = 152462
 
 // MuslSource is musl's source as the snapshot holds it, Ubuntu's source
 // package for the musl that musl-tools links: the upstream tarball and
@@ -135,6 +148,7 @@ func Command(out, ca string, jobs int) []string {
 		"LIBUSB_SHA256=" + LibUSB.SHA256,
 		"DFU_UTIL_URL=" + DfuUtil.URL,
 		"DFU_UTIL_SHA256=" + DfuUtil.SHA256,
+		"DFU_UTIL_FALLBACK_URLS=" + strings.Join(DfuUtil.Fallbacks, " "),
 		"MUSL_ORIG_URL=" + MuslSource[0].URL,
 		"MUSL_ORIG_SHA256=" + MuslSource[0].SHA256,
 		"MUSL_DEBIAN_URL=" + MuslSource[1].URL,
