@@ -72,10 +72,14 @@ genrule(
 
 # The ELF fits 32 KB of flash and 6 KB of RAM with 1 KB of stack; a chip
 # one byte short fails; the vector table is sound; fw.bin is its image.
+# Also: its use is the one recorded in the test, so a PR that changes the
+# size shows by how much, and it leaves headroom (flash at most 90 %, 2 KB
+# of stack). --nocapture puts the numbers in the test log.
 rust_test(
     name = "budget_test",
     size = "small",
     srcs = ["test/budget_test.rs"],
+    args = ["--nocapture"],
     data = [
         ":fw",
         ":fw_bin",
