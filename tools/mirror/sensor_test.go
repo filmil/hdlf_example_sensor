@@ -153,10 +153,11 @@ func TestDownloaderConfigNamesEveryCrateRelease(t *testing.T) {
 }
 
 // //third_party/rust holds the licences of every Rust tarball MODULE.bazel
-// pins: its README names the pinned version and, for each component, the
-// files it holds. A toolchain update that skips the directory fails here.
+// pins: its README names the pinned versions, the rustc sha256 and every
+// tarball, and each component's files are there. A toolchain update that
+// skips the directory fails here.
 func TestThirdPartyRustMatchesModule(t *testing.T) {
-	mod, err := readRunfile("MODULE.bazel")
+	modBytes, err := readRunfile("MODULE.bazel")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,21 +165,48 @@ func TestThirdPartyRustMatchesModule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := string(readme)
-	versions := regexp.MustCompile(`versions = \["([^"]+)"\]`).FindStringSubmatch(string(mod))
-	if versions == nil {
-		t.Fatal("MODULE.bazel pins no Rust version")
+	mod, r := string(modBytes), string(readme)
+	versions := regexp.MustCompile(`versions = \["([^"]+)"\]`).FindStringSubmatch(mod)
+	rulesRust := regexp.MustCompile(`bazel_dep\(name = "rules_rust", version = "([^"]+)"\)`).FindStringSubmatch(mod)
+	if versions == nil || rulesRust == nil {
+		t.Fatal("MODULE.bazel pins no Rust or rules_rust version")
 	}
-	if !strings.Contains(r, "Rust "+versions[1]) {
-		t.Errorf("third_party/rust/README.md does not name Rust %s", versions[1])
+	for _, want := range []string{"Rust " + versions[1], "rules_rust " + rulesRust[1]} {
+		if !strings.Contains(r, want) {
+			t.Errorf("third_party/rust/README.md does not name %s", want)
+		}
 	}
-	pinned := regexp.MustCompile(`"((?:rustc|cargo|clippy|rustfmt|llvm-tools|rust-std)-[^"]+)": "[0-9a-f]{64}"`).FindAllStringSubmatch(string(mod), -1)
+	pinned := regexp.MustCompile(`"((rustc|cargo|clippy|rustfmt|llvm-tools|rust-std)-[^"]+)": "([0-9a-f]{64})"`).FindAllStringSubmatch(mod, -1)
 	if len(pinned) == 0 {
 		t.Fatal("MODULE.bazel pins no Rust tarballs")
+	}
+	// The files each component must have here.
+	files := map[string][]string{
+		"rustc": {"LICENSE", "LICENSE-APACHE", "LICENSE-MIT", "COPYRIGHT-library.html",
+			"rustc-licenses-Apache-2.0.txt", "rustc-licenses-BSD-2-Clause.txt", "rustc-licenses-LLVM-exception.txt",
+			"rustc-licenses-MIT.txt", "rustc-licenses-Unicode-3.0.txt"},
+		"cargo":      {"cargo-LICENSE-APACHE", "cargo-LICENSE-MIT", "cargo-LICENSE-THIRD-PARTY"},
+		"clippy":     {"clippy-LICENSE-APACHE", "clippy-LICENSE-MIT"},
+		"rustfmt":    {"rustfmt-LICENSE-APACHE", "rustfmt-LICENSE-MIT"},
+		"llvm-tools": {"llvm-tools-LICENSE.TXT"},
+		"rust-std":   {}, // rustc's, byte for byte
 	}
 	for _, p := range pinned {
 		if !strings.Contains(r, "`"+p[1]+"`") {
 			t.Errorf("third_party/rust/README.md has no row for the pinned %s", p[1])
+		}
+		if p[2] == "rustc" && !strings.Contains(r, p[3]) {
+			t.Errorf("third_party/rust/README.md does not name rustc's pinned sha256 %s", p[3])
+		}
+		want, known := files[p[2]]
+		if !known {
+			t.Errorf("no files listed for the pinned %s", p[1])
+		}
+		for _, f := range want {
+			b, err := readRunfile("third_party/rust/" + f)
+			if err != nil || len(b) == 0 {
+				t.Errorf("%s: third_party/rust/%s is missing or empty", p[2], f)
+			}
 		}
 	}
 }
