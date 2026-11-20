@@ -151,3 +151,34 @@ func TestDownloaderConfigNamesEveryCrateRelease(t *testing.T) {
 		t.Error("bazel_downloader.cfg must end with crates.io itself: rewrite (static.crates.io/crates/.*) $1")
 	}
 }
+
+// //third_party/rust holds the licences of every Rust tarball MODULE.bazel
+// pins: its README names the pinned version and, for each component, the
+// files it holds. A toolchain update that skips the directory fails here.
+func TestThirdPartyRustMatchesModule(t *testing.T) {
+	mod, err := readRunfile("MODULE.bazel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	readme, err := readRunfile("third_party/rust/README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := string(readme)
+	versions := regexp.MustCompile(`versions = \["([^"]+)"\]`).FindStringSubmatch(string(mod))
+	if versions == nil {
+		t.Fatal("MODULE.bazel pins no Rust version")
+	}
+	if !strings.Contains(r, "Rust "+versions[1]) {
+		t.Errorf("third_party/rust/README.md does not name Rust %s", versions[1])
+	}
+	pinned := regexp.MustCompile(`"((?:rustc|cargo|clippy|rustfmt|llvm-tools|rust-std)-[^"]+)": "[0-9a-f]{64}"`).FindAllStringSubmatch(string(mod), -1)
+	if len(pinned) == 0 {
+		t.Fatal("MODULE.bazel pins no Rust tarballs")
+	}
+	for _, p := range pinned {
+		if !strings.Contains(r, "`"+p[1]+"`") {
+			t.Errorf("third_party/rust/README.md has no row for the pinned %s", p[1])
+		}
+	}
+}

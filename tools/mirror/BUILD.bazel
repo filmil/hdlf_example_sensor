@@ -28,6 +28,7 @@ go_test(
     data = [
         "manifest.json",
         "//:MODULE.bazel",
+        "//third_party/rust:README.md",
         "//:bazel_downloader.cfg",
         "//fw:Cargo.lock",
     ],
