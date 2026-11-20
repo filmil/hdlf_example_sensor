@@ -10,8 +10,8 @@
 //
 //   - mirrored: the same bytes as an upstream URL, such as a GitLab
 //     archive; or
-//   - built: made from an upstream source by a script outside this tool
-//     (in bazel_rules_em, the openEMS wheels). None here, yet.
+//   - built: made from an upstream source by a script outside this tool,
+//     such as dfu-util by //tools/dfu_util.
 //
 // A dry run gets every upstream file (each mirrored asset, and the source
 // of each built asset) and checks its sha256. An upload does the same
@@ -21,17 +21,20 @@
 // An upstream file comes from --built_dir when a file there has its name:
 // the asset's name for a mirrored asset, the source URL's file name for a
 // built asset's source. A build usually leaves them there, and some hosts
-// (SourceForge) refuse this tool's downloads. Otherwise it is downloaded
-// from its URL, then from each fallback URL in turn if a download fails.
-// Either way its sha256 must be the manifest's.
+// (SourceForge) refuse this tool's downloads. A local file with other
+// bytes is an error. Otherwise the file is downloaded from its URL, then
+// from each fallback URL in turn while a download fails or has another
+// sha256. --built_dir holds one release's files, so it needs --release.
 package mirror
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
@@ -162,6 +165,7 @@ func Download(client *http.Client, url, dir, name string) (string, error) {
 	h := sha256.New()
 	if _, err := io.Copy(io.MultiWriter(f, h), resp.Body); err != nil {
 		f.Close()
+		os.Remove(f.Name())
 		return "", fmt.Errorf("GET %s: %w", url, err)
 	}
 	if err := f.Close(); err != nil {
@@ -172,33 +176,53 @@ func Download(client *http.Client, url, dir, name string) (string, error) {
 
 // sourceName is the file name of a source URL: where --built_dir may hold it.
 func sourceName(u string) string {
-	if p, err := url.Parse(u); err == nil {
+	if p, err := url.Parse(u); err == nil && p.Path != "" && !strings.HasSuffix(p.Path, "/") {
 		return path.Base(p.Path)
 	}
 	return ""
 }
 
-// fetch gets one upstream file: from o.BuiltDir when it holds local, else
-// downloaded into o.WorkDir as name, from each of urls in turn until one
-// download succeeds. It returns the file's path, its sha256, and where it
-// came from. The caller checks the sha256.
-func fetch(o Options, local string, urls []string, name string) (p, sum, from string, err error) {
+// fetched is one upstream file that fetch got.
+type fetched struct {
+	path, sum, from string
+	// local: path is in o.BuiltDir, so the caller must not remove it.
+	local bool
+}
+
+// fetch gets one upstream file whose sha256 should be want: from
+// o.BuiltDir when it holds local (whatever its sha256, which the caller
+// checks), else downloaded into o.WorkDir as name, from each of urls in
+// turn until one has the sha256 want. When none has, the error lists
+// every failed download and every other sha256.
+func fetch(o Options, local string, urls []string, name, want string) (fetched, error) {
 	if o.BuiltDir != "" {
-		p = filepath.Join(o.BuiltDir, local)
-		if fi, statErr := os.Stat(p); statErr == nil && fi.Mode().IsRegular() {
-			sum, err = FileSHA256(p)
-			return p, sum, p, err
+		p := filepath.Join(o.BuiltDir, local)
+		fi, err := os.Stat(p)
+		switch {
+		case err == nil && !fi.Mode().IsRegular():
+			return fetched{}, fmt.Errorf("%s is not a regular file", p)
+		case err == nil:
+			sum, err := FileSHA256(p)
+			return fetched{path: p, sum: sum, from: p, local: true}, err
+		case !errors.Is(err, fs.ErrNotExist):
+			return fetched{}, err
 		}
 	}
+	p := filepath.Join(o.WorkDir, name)
 	var failed []string
 	for _, u := range urls {
-		sum, err = Download(o.Client, u, o.WorkDir, name)
-		if err == nil {
-			return filepath.Join(o.WorkDir, name), sum, u, nil
+		sum, err := Download(o.Client, u, o.WorkDir, name)
+		switch {
+		case err != nil:
+			failed = append(failed, err.Error())
+		case sum != want:
+			failed = append(failed, fmt.Sprintf("%s has sha256 %s, the manifest says %s", u, sum, want))
+		default:
+			return fetched{path: p, sum: sum, from: u}, nil
 		}
-		failed = append(failed, err.Error())
 	}
-	return "", "", "", fmt.Errorf("%s", strings.Join(failed, "; "))
+	os.Remove(p)
+	return fetched{}, fmt.Errorf("%s", strings.Join(failed, "; "))
 }
 
 // FileSHA256 returns the sha256 of the file at p, in hex.
@@ -236,37 +260,38 @@ func Check(r Release, o Options) (map[string]string, error) {
 	var problems []string
 	for _, a := range r.Assets {
 		if a.URL != "" {
-			p, got, from, err := fetch(o, a.Name, append([]string{a.URL}, a.FallbackURLs...), a.Name)
+			f, err := fetch(o, a.Name, append([]string{a.URL}, a.FallbackURLs...), a.Name, a.SHA256)
 			switch {
 			case err != nil:
 				problems = append(problems, fmt.Sprintf("%s: %v", a.Name, err))
-			case got != a.SHA256:
-				problems = append(problems, fmt.Sprintf("%s: %s has sha256 %s, the manifest says %s", a.Name, from, got, a.SHA256))
+			case f.sum != a.SHA256:
+				problems = append(problems, fmt.Sprintf("%s: %s has sha256 %s, the manifest says %s", a.Name, f.from, f.sum, a.SHA256))
 			default:
-				fmt.Fprintf(o.Log, "ok %s/%s %s (from %s)\n", r.Tag, a.Name, got, from)
-				ready[a.Name] = p
+				fmt.Fprintf(o.Log, "ok %s/%s %s (from %s)\n", r.Tag, a.Name, f.sum, f.from)
+				ready[a.Name] = f.path
 			}
 			continue
 		}
 		src := a.Name + ".source"
-		p, got, from, err := fetch(o, sourceName(a.Built.Source), append([]string{a.Built.Source}, a.Built.SourceFallbackURLs...), src)
+		f, err := fetch(o, sourceName(a.Built.Source), append([]string{a.Built.Source}, a.Built.SourceFallbackURLs...), src, a.Built.SourceSHA256)
 		switch {
 		case err != nil:
 			problems = append(problems, fmt.Sprintf("%s: source: %v", a.Name, err))
-		case got != a.Built.SourceSHA256:
-			problems = append(problems, fmt.Sprintf("%s: source %s has sha256 %s, the manifest says %s", a.Name, from, got, a.Built.SourceSHA256))
+		case f.sum != a.Built.SourceSHA256:
+			problems = append(problems, fmt.Sprintf("%s: source %s has sha256 %s, the manifest says %s", a.Name, f.from, f.sum, a.Built.SourceSHA256))
 		default:
-			fmt.Fprintf(o.Log, "ok %s/%s: source %s (from %s)\n", r.Tag, a.Name, got, from)
+			fmt.Fprintf(o.Log, "ok %s/%s: source %s (from %s)\n", r.Tag, a.Name, f.sum, f.from)
 		}
-		if p == filepath.Join(o.WorkDir, src) {
-			os.Remove(p)
+		// Only a download of ours; never a file in --built_dir.
+		if f.path != "" && !f.local {
+			os.Remove(f.path)
 		}
 		if o.BuiltDir == "" {
 			fmt.Fprintf(o.Log, "-- %s/%s: built by %s; give --built_dir to check and upload it\n", r.Tag, a.Name, a.Built.Script)
 			continue
 		}
-		p = filepath.Join(o.BuiltDir, a.Name)
-		got, err = FileSHA256(p)
+		p := filepath.Join(o.BuiltDir, a.Name)
+		got, err := FileSHA256(p)
 		switch {
 		case err != nil:
 			problems = append(problems, fmt.Sprintf("%s: %v", a.Name, err))

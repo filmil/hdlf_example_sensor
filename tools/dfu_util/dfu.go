@@ -57,12 +57,16 @@ var DfuUtil = Input{
 	SHA256: "b4b53ba21a82ef7e3d4c47df2952adf5fa494f499b6b0b57c58c5d04ae8ff19e",
 	Fallbacks: []string{
 		"https://dfu-util.sourceforge.net/releases/dfu-util-0.11.tar.gz",
-		"https://snapshot.ubuntu.com/ubuntu/20261117T000000Z/pool/universe/d/dfu-util/dfu-util_0.11.orig.tar.gz",
+		"https://snapshot.ubuntu.com/ubuntu/" + AptSnapshot + "/pool/universe/d/dfu-util/dfu-util_0.11.orig.tar.gz",
 	},
 }
 
 // DfuUtilSize is the length of dfu-util 0.11's tarball, in bytes.
 const DfuUtilSize = 152462
+
+// DfuUtilTorrentSHA256 is the sha256 of the .torrent published beside
+// DfuUtil.URL, //third_party/dfu_util:dfu-util-0.11.tar.gz.torrent.
+const DfuUtilTorrentSHA256 = "f84502aca8273ad7b405899c7df52faaf0e285a83b43293ea1c1f4f21645de01"
 
 // MuslSource is musl's source as the snapshot holds it, Ubuntu's source
 // package for the musl that musl-tools links: the upstream tarball and
@@ -70,11 +74,11 @@ const DfuUtilSize = 152462
 // every library linked into the binary (the operator's Q81).
 var MuslSource = []Input{
 	{
-		URL:    "https://snapshot.ubuntu.com/ubuntu/20261117T000000Z/pool/universe/m/musl/musl_1.2.5.orig.tar.gz",
+		URL:    "https://snapshot.ubuntu.com/ubuntu/" + AptSnapshot + "/pool/universe/m/musl/musl_1.2.5.orig.tar.gz",
 		SHA256: "a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4",
 	},
 	{
-		URL:    "https://snapshot.ubuntu.com/ubuntu/20261117T000000Z/pool/universe/m/musl/musl_1.2.5-3build1.debian.tar.xz",
+		URL:    "https://snapshot.ubuntu.com/ubuntu/" + AptSnapshot + "/pool/universe/m/musl/musl_1.2.5-3build1.debian.tar.xz",
 		SHA256: "fd50d32f31502322423ff94e982e97e53ca0902660849054414456bcf0dd4d0b",
 	},
 }

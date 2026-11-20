@@ -9,10 +9,10 @@
 //
 // Upload (the operator only; it needs gh, logged in with write access):
 //
-//	bazel run //tools/mirror -- --dry_run=false --built_dir=/path/to/built
+//	bazel run //tools/mirror -- --dry_run=false --release=TAG --built_dir=/path/to/built
 //
-// --built_dir holds the built assets by name, made as the manifest's
-// "script" field says. An upstream file found there by name (a mirrored
+// --built_dir holds one release's built assets by name, made as the
+// manifest's "script" field says, so it needs --release. An upstream file found there by name (a mirrored
 // asset's name, or the file name of a built asset's source URL) is used
 // instead of downloading it, checked against the same sha256: the build
 // leaves its sources there, and SourceForge refuses this tool's
@@ -59,6 +59,11 @@ func run() error {
 	m, err := mirror.Parse(b)
 	if err != nil {
 		return err
+	}
+	if *builtDir != "" && *release == "" {
+		// One build's directory holds one release's files; another release
+		// may have a file of the same name with other bytes.
+		return fmt.Errorf("--built_dir needs --release")
 	}
 	if *workDir == "" {
 		d, err := os.MkdirTemp("", "mirror-")

@@ -59,6 +59,8 @@ func TestParseRejects(t *testing.T) {
 		"empty fallback":             `{"name": "a", "sha256": "` + sha + `", "url": "https://x/a", "fallback_urls": [""]}`,
 		"built with fallback_urls":   `{"name": "a", "sha256": "` + sha + `", "fallback_urls": ["https://y/s"], "built": {"source": "https://x/s", "source_sha256": "` + sha + `", "script": "s.sh"}}`,
 		"source without a file name": `{"name": "a", "sha256": "` + sha + `", "built": {"source": "https://x/", "source_sha256": "` + sha + `", "script": "s.sh"}}`,
+		"source ends in a slash":     `{"name": "a", "sha256": "` + sha + `", "built": {"source": "https://x/dir/", "source_sha256": "` + sha + `", "script": "s.sh"}}`,
+		"empty source fallback":      `{"name": "a", "sha256": "` + sha + `", "built": {"source": "https://x/s", "source_fallback_urls": [""], "source_sha256": "` + sha + `", "script": "s.sh"}}`,
 	} {
 		if _, err := Parse([]byte(strings.Replace(good, "ASSET", asset, 1))); err == nil {
 			t.Errorf("%s: parsed", name)
@@ -204,6 +206,9 @@ func TestCheckLocalAndFallback(t *testing.T) {
 	if len(requests) != 0 {
 		t.Errorf("downloaded %v, want nothing", requests)
 	}
+	if _, err := os.Stat(filepath.Join(dir, "app.tar")); err != nil {
+		t.Errorf("the source in --built_dir is gone: %v", err)
+	}
 	if !strings.Contains(log.String(), "source "+sum("appimage")+" (from "+filepath.Join(dir, "app.tar")+")") {
 		t.Errorf("log does not say the source came from %s:\n%s", dir, log.String())
 	}
@@ -241,10 +246,75 @@ func TestCheckLocalAndFallback(t *testing.T) {
 		t.Errorf("log does not name the fallback:\n%s", log.String())
 	}
 
-	// No local files and no fallbacks: every refusal is reported.
+	// No local files and no fallbacks: both refusals are reported.
 	_, err = Check(release(false), opts("", &bytes.Buffer{}))
 	if err == nil || strings.Count(err.Error(), "403 Forbidden") != 2 {
 		t.Errorf("err %v, want two 403s", err)
+	}
+
+	// A directory where a file should be is an error, not a download.
+	requests = nil
+	dir = builtDir(map[string]string{"app": "prebuilt"})
+	if err := os.Mkdir(filepath.Join(dir, "lib.tar.gz"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Check(release(true), opts(dir, &bytes.Buffer{})); err == nil || !strings.Contains(err.Error(), "lib.tar.gz is not a regular file") {
+		t.Errorf("err %v, want lib.tar.gz is not a regular file", err)
+	}
+}
+
+// A download with other bytes moves on to the next URL, as a failed one
+// does; when none has the pinned bytes, every attempt is reported, and
+// no download is left behind.
+func TestCheckFallbackOnMismatch(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/interstitial/lib.tar.gz", "/interstitial/app.tar":
+			w.Write([]byte("<html>please wait</html>"))
+		case "/mirror/lib.tar.gz":
+			w.Write([]byte("library"))
+		case "/mirror/app.tar":
+			w.Write([]byte("appimage"))
+		default:
+			http.Error(w, "no", http.StatusForbidden)
+		}
+	}))
+	defer srv.Close()
+	release := func(last string) Release {
+		return Release{Tag: "t", Title: "T", Assets: []Asset{
+			{Name: "lib.tar.gz", SHA256: sum("library"), URL: srv.URL + "/sf/lib.tar.gz",
+				FallbackURLs: []string{srv.URL + "/interstitial/lib.tar.gz", srv.URL + last + "/lib.tar.gz"}},
+			{Name: "app", SHA256: sum("prebuilt"), Built: &Built{Source: srv.URL + "/interstitial/app.tar",
+				SourceFallbackURLs: []string{srv.URL + last + "/app.tar"}, SourceSHA256: sum("appimage"), Script: "make.sh"}},
+		}}
+	}
+	work := t.TempDir()
+	ready, err := Check(release("/mirror"), Options{Client: srv.Client(), WorkDir: work, Log: &bytes.Buffer{}})
+	if err != nil {
+		t.Fatalf("with a good last fallback: %v", err)
+	}
+	if b, _ := os.ReadFile(ready["lib.tar.gz"]); string(b) != "library" {
+		t.Errorf("lib.tar.gz: got %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(work, "app.source")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the downloaded source is still in the work directory: %v", err)
+	}
+
+	work = t.TempDir()
+	_, err = Check(release("/gone"), Options{Client: srv.Client(), WorkDir: work, Log: &bytes.Buffer{}})
+	if err == nil {
+		t.Fatal("with no good URL: no error")
+	}
+	for _, w := range []string{
+		"lib.tar.gz: GET " + srv.URL + "/sf/lib.tar.gz: 403 Forbidden; " + srv.URL + "/interstitial/lib.tar.gz has sha256 " + sum("<html>please wait</html>") + ", the manifest says " + sum("library") + "; GET " + srv.URL + "/gone/lib.tar.gz: 403 Forbidden",
+		"app: source: " + srv.URL + "/interstitial/app.tar has sha256",
+	} {
+		if !strings.Contains(err.Error(), w) {
+			t.Errorf("%v\nwant %q in it", err, w)
+		}
+	}
+	if left, _ := os.ReadDir(work); len(left) != 0 {
+		t.Errorf("left in the work directory: %v", left)
 	}
 }
 

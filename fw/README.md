@@ -179,49 +179,13 @@ from pinned sources in a pinned Ubuntu container with podman; two builds
 give the same bytes, and the tool fails unless the binary has the sha256
 `MODULE.bazel` pins. The binary is mirrored as the release
 `mirror-dfu-util-0.11`, which the operator uploads with
-`bazel run //tools/mirror -- --dry_run=false --built_dir=DIR`.
+`bazel run //tools/mirror -- --dry_run=false --release=mirror-dfu-util-0.11 --built_dir=DIR`.
 The mirror tool takes each source from `DIR` too, where the build left
 it, checked against the same sha256, rather than downloading it.
 
-dfu-util's source tarball is fetched first from our copy,
-`https://bt.hdlfactory.com/dfu-util/0.11/dfu-util-0.11.tar.gz`, then from
-SourceForge, which refuses some clients, then from Ubuntu's snapshot
-(`dfu-util_0.11.orig.tar.gz`, the same bytes). All three are pinned in
-`tools/dfu_util/dfu.go` and the manifest. Next to it on bt.hdlfactory.com
-is its web-seeded `.torrent`, `third_party/dfu_util/dfu-util-0.11.tar.gz.torrent`,
-made as bazel_rules_kicad's `tools/models3d` makes its own. Publishing
-them is an operator step, since it needs the upload login. On eph4, from
-a checkout of this repository, with the tarball the build left in
-`/tmp/dfu-util`:
-
-```
-bash -euo pipefail <<'EOF'
-F=/tmp/dfu-util/dfu-util-0.11.tar.gz
-T=third_party/dfu_util/dfu-util-0.11.tar.gz.torrent
-U=https://bt.hdlfactory.com/dfu-util/0.11/dfu-util-0.11.tar.gz
-echo "b4b53ba21a82ef7e3d4c47df2952adf5fa494f499b6b0b57c58c5d04ae8ff19e  $F" | sha256sum -c -
-echo "f84502aca8273ad7b405899c7df52faaf0e285a83b43293ea1c1f4f21645de01  $T" | sha256sum -c -
-# A published file never changes: stop if either is there already.
-for u in "$U" "$U.torrent"; do
-  if curl -fsSI "$u" >/dev/null 2>&1; then echo "$u is already published"; exit 1; fi
-done
-netrc() { printf 'machine bt.hdlfactory.com login publisher password %s\n' \
-  "$(kubectl -n bt get secret bt-upload -o jsonpath='{.data.password}' | base64 -d)"; }
-curl -fsS --netrc-file <(netrc) -T "$F" "$U"
-curl -fsS --netrc-file <(netrc) -T "$T" "$U.torrent"
-echo published
-EOF
-```
-
-The password goes from kubectl straight into curl's netrc, through a
-pipe; it is never printed, and in no command's arguments. To check,
-without the login:
-
-```
-U=https://bt.hdlfactory.com/dfu-util/0.11/dfu-util-0.11.tar.gz
-curl -fsS "$U" | sha256sum          # b4b53ba21a82ef7e3d4c47df2952adf5fa494f499b6b0b57c58c5d04ae8ff19e
-curl -fsS "$U.torrent" | sha256sum  # f84502aca8273ad7b405899c7df52faaf0e285a83b43293ea1c1f4f21645de01
-```
+dfu-util's source tarball is fetched first from our copy on
+bt.hdlfactory.com, then from SourceForge and Ubuntu's snapshot;
+`third_party/dfu_util/README.md` says how that copy is published.
 dfu-util is GPL-2.0-or-later and libusb LGPL-2.1-or-later. musl is MIT,
 with some parts under BSD-2-Clause, BSD-3-Clause, ISC and other permissive
 terms, as its `LICENSE` lists. Their licences are in `//third_party`. The
