@@ -14,6 +14,7 @@ board's lower-left corner at (ORIGIN_X, ORIGIN_Y + width) on the page.
 import argparse
 import csv
 import json
+import math
 import sys
 
 import gen
@@ -46,7 +47,10 @@ def rows(pos, pos_all, length, width):
         if not (0 <= x <= length and 0 <= y <= width):
             raise ValueError("%s at (%.3f, %.3f) in the board's frame, outside the board" % (r["Ref"], x, y))
         # Rounded first, so that -0.01 is 0.0, not 360.0.
-        rot = round(float(r["Rot"]), 1) % 360
+        rot = float(r["Rot"])
+        if not math.isfinite(rot):
+            raise ValueError("%s: rotation %s" % (r["Ref"], r["Rot"]))
+        rot = round(rot, 1) % 360
         out.append([r["Ref"], r["Val"], r["Package"], "%.3f" % x, "%.3f" % y, "%.1f" % rot, r["Side"], "no" if r["Ref"] in placed else "yes"])
     extra = placed - {r["Ref"] for r in pos_all}
     if extra:

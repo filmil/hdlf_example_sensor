@@ -23,14 +23,21 @@ import placement
 # One colour per tool, in the order of the tools' diameters.
 COLOURS = ["#1f77b4", "#d62728", "#2ca02c", "#9467bd", "#ff7f0e", "#8c564b", "#e377c2", "#17becf"]
 
-TOOL = re.compile(r"^T(\d+)C([0-9.]+)$")
+TOOL = re.compile(r"^T(\d+)C(\d*\.\d+)$")
 SELECT = re.compile(r"^T(\d+)$")
 # The body commands kicad_drill writes that place no hole: absolute
 # coordinates, drill mode, end of program. Anything else is refused, so a
 # hole in a form this reader does not know is never left out.
 QUIET = {"G90", "G05", "M30"}
-POINT = re.compile(r"^X(-?[0-9.]+)Y(-?[0-9.]+)$")
-SLOT = re.compile(r"^X(-?[0-9.]+)Y(-?[0-9.]+)G85X(-?[0-9.]+)Y(-?[0-9.]+)$")
+# Decimal coordinates only: a fixed-point file (no decimal point) would
+# be read at the wrong scale.
+_N = r"(-?\d*\.\d+)"
+POINT = re.compile(r"^X%sY%s$" % (_N, _N))
+SLOT = re.compile(r"^X%sY%sG85X%sY%s$" % (_N, _N, _N, _N))
+# The header lines kicad_drill writes that define no tool: the start,
+# the format version, and the units (decimal millimetres). Anything else
+# in the header (INCH, METRIC,TZ, ICI,ON, G91, ...) is refused.
+HEADER = {"M48", "FMAT,2", "METRIC"}
 
 
 def holes(text):
@@ -48,14 +55,15 @@ def holes(text):
         if not body:
             m = TOOL.match(line)
             if m:
-                tools[int(m.group(1))] = float(m.group(2))
-            elif line == "METRIC" or line.startswith("METRIC,"):
-                metric = True
-            elif line.startswith("INCH"):
-                raise ValueError("an Excellon file in inches; want METRIC")
+                t, d = int(m.group(1)), float(m.group(2))
+                if t == 0 or t in tools or d <= 0:
+                    raise ValueError("a bad tool definition (T0, a tool twice, or no diameter): %s" % line)
+                tools[t] = d
+            elif line in HEADER:
+                metric = metric or line == "METRIC"
+            else:
+                raise ValueError("an Excellon header line this reader does not know: %s" % line)
             continue
-        if not metric:
-            raise ValueError("an Excellon file without METRIC in its header")
         m = SELECT.match(line)
         if m:
             t = int(m.group(1))
@@ -72,6 +80,10 @@ def holes(text):
             continue
         if line not in QUIET:
             raise ValueError("an Excellon command this reader does not know: %s" % line)
+    if not body:
+        raise ValueError("an Excellon file with no % ending its header")
+    if not metric:
+        raise ValueError("an Excellon file without METRIC in its header")
     return out
 
 

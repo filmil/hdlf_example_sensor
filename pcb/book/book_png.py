@@ -11,7 +11,7 @@ import sys
 
 # The <svg> element's own width attribute: after white space, so that
 # stroke-width and the like never match.
-WIDTH = re.compile(r'<svg\b[^>]*\swidth="([0-9.]+)mm"', re.S)
+WIDTH = re.compile(r'<svg\s[^>]*\swidth="([0-9.]+)mm"', re.S)
 
 
 def dpi_for(svg_text, px):
