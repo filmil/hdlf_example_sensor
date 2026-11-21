@@ -90,10 +90,39 @@ class PinmapTest(unittest.TestCase):
         by_net = {r[2]: r for r in rows[1:]}
         self.assertEqual(by_net["I2C_SDA"][3:], ["PF0", "I2C1 SDA", "1"])
         self.assertEqual(by_net["USB_DP"][3:], ["PA12", "USB DP", ""])
-        self.assertEqual(by_net["LED"][4:], ["gpio", ""])
-        self.assertEqual(by_net["BOOT0"][3:5], ["PB8", "pin PB8"])
-        # A pin the firmware does not drive has no port or function.
+        self.assertEqual(by_net["LED"][3:], ["PA4", "gpio", ""])
+        self.assertEqual(by_net["BOOT0"][3:], ["PB8", "pin PB8", ""])
+        for r in rows:
+            self.assertEqual(len(r), 6, r)
+        # A pin the firmware does not drive has no port, function or af.
+        for r in rows[1:]:
+            if not r[3]:
+                self.assertEqual(r[4:], ["", ""], r)
         self.assertTrue(any(r[3] == "" and r[2] for r in rows[1:]), "no power or other pin")
+
+    def test_the_pinout_table_on_made_up_pins(self):
+        # KiCad's unconnected-(...) nets show as no net; pins sort by
+        # number, also past 9 and with letters (BGA-style names).
+        spec = {"nets": {"LED": {"gpio": True}}}
+        names = {"10": "PA4", "2": "PA0", "A1": "VDD", "1": "PA9/PA11"}
+        nets = {"LED": ["10"], "unconnected-(U1-PA0-Pad2)": ["2"], "+3V3": ["A1"]}
+        out = pinmap.tsv(spec, nets, names, {"LED": ("PA4", None, 0, "10")})
+        self.assertEqual(out.splitlines()[1:], [
+            "1\tPA9/PA11\t\t\t\t",
+            "2\tPA0\t\t\t\t",
+            "10\tPA4\tLED\tPA4\tgpio\t",
+            "A1\tVDD\t+3V3\t\t\t",
+        ])
+
+    def test_the_pinout_table_on_a_bad_board(self):
+        out, problems = pinmap.run(
+            (ARGS.netlist, self.move("I2C_SDA", "PA4")), (ARGS.symbols, self.symbols), self.meta, self.spec, "tsv")
+        self.assertIsNone(out)
+        self.assertTrue(problems)
+
+    def test_an_unknown_format(self):
+        with self.assertRaises(ValueError):
+            pinmap.run((ARGS.netlist, self.netlist), (ARGS.symbols, self.symbols), self.meta, self.spec, "csv")
 
     # Nets on the wrong pins.
 

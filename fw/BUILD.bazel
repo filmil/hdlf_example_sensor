@@ -190,12 +190,15 @@ _PINMAP_INPUTS = {
 
 # The inputs are tools, not srcs: tools build for the build machine, while
 # srcs would follow :fw's transition to the chip, where the netlist's own
-# tools have no toolchain.
-genrule(
-    name = "pins_rs",
-    outs = ["pins.rs"],
+# tools have no toolchain. pins_rs is the pin map as Rust; pinout_tsv is
+# the pinout as a table for the book (bazel-cad-book draws it): one row
+# per pin of U1, from the same checks.
+[genrule(
+    name = name,
+    outs = [out],
     cmd = " ".join([
         "$(execpath :gen_pins)",
+        "--format " + fmt,
         "--netlist $(execpath //elec:netlist)",
         "--symbols $(execpath @kicad_libs//:symbols/MCU_ST_STM32F0.kicad_sym)",
         "$$(for m in $(execpaths //third_party/crates:stm32-metapac-metadata); do echo --metadata $$m; done)",
@@ -203,24 +206,10 @@ genrule(
         "--out $@",
     ]),
     tools = [":gen_pins"] + _PINMAP_INPUTS.values(),
-)
-
-# The pinout as a table for the book (bazel-cad-book draws it): one row
-# per pin of U1, from the same checks that write pins.rs.
-genrule(
-    name = "pinout_tsv",
-    outs = ["pinout.tsv"],
-    cmd = " ".join([
-        "$(execpath :gen_pins)",
-        "--format tsv",
-        "--netlist $(execpath //elec:netlist)",
-        "--symbols $(execpath @kicad_libs//:symbols/MCU_ST_STM32F0.kicad_sym)",
-        "$$(for m in $(execpaths //third_party/crates:stm32-metapac-metadata); do echo --metadata $$m; done)",
-        "--spec $(execpath pins.json)",
-        "--out $@",
-    ]),
-    tools = [":gen_pins"] + _PINMAP_INPUTS.values(),
-)
+) for name, out, fmt in [
+    ("pins_rs", "pins.rs", "rust"),
+    ("pinout_tsv", "pinout.tsv", "tsv"),
+]]
 
 # The table and pins.rs agree, net by net: the same port and alternate
 # function.

@@ -337,7 +337,10 @@ def tsv(spec, nets, names, chosen):
             on_pin.setdefault(p, []).append(net)
     used = {c[3]: (net, c) for net, c in chosen.items()}
     rows = ["pin\tname\tnet\tport\tfunction\taf"]
-    for pin in sorted(names, key=lambda p: (len(p), p)):
+    def natural(p):
+        return [(0, int(t), "") if t.isdigit() else (1, 0, t) for t in re.findall(r"\d+|\D+", p)]
+
+    for pin in sorted(names, key=natural):
         port = function = af = ""
         if pin in used:
             net, (port, a, _, _) = used[pin]
@@ -356,6 +359,8 @@ def tsv(spec, nets, names, chosen):
 def run(netlist, symbols, metadata_files, spec, fmt="rust"):
     """Returns (pins.rs text, or the pinout table when fmt is "tsv", or
     None; [problem])."""
+    if fmt not in ("rust", "tsv"):
+        raise ValueError("format %r: want rust or tsv" % fmt)
     problems = check_spec(spec)
     if problems:
         return None, problems

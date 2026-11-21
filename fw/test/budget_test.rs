@@ -160,12 +160,18 @@ fn fw_bin_is_the_image() {
     assert_eq!(read("FW_BIN"), img, "fw.bin is not the ELF's image");
 }
 
-/// The rows of a table the book draws, without its header.
-fn table(var: &str) -> Vec<Vec<String>> {
+/// The rows of a table the book draws, after checking its header; every
+/// row has the header's number of columns.
+fn table(var: &str, header: &[&str]) -> Vec<Vec<String>> {
     let text = String::from_utf8(read(var)).expect("UTF-8");
     let mut lines = text.lines();
-    lines.next().expect("a header");
-    lines.map(|l| l.split('\t').map(String::from).collect()).collect()
+    let head: Vec<&str> = lines.next().expect("a header").split('\t').collect();
+    assert_eq!(head, header, "{}: header", var);
+    let rows: Vec<Vec<String>> = lines.map(|l| l.split('\t').map(String::from).collect()).collect();
+    for r in &rows {
+        assert_eq!(r.len(), header.len(), "{}: row {:?}", var, r);
+    }
+    rows
 }
 
 /// //fw:budget_tsv has this test's numbers: the use, the chip, the cap and
@@ -175,7 +181,7 @@ fn the_budget_table_agrees() {
     let (d, e) = firmware();
     let m = &elf::STM32F042F6;
     let u = elf::usage(&d, &e, m).expect("usage");
-    let got: Vec<(String, u64)> = table("BUDGET_TSV").into_iter().map(|r| (r[0].clone(), r[1].parse().expect("a number"))).collect();
+    let got: Vec<(String, u64)> = table("BUDGET_TSV", &["quantity", "value"]).into_iter().map(|r| (r[0].clone(), r[1].parse().expect("a number"))).collect();
     let want: Vec<(String, u64)> = [
         ("flash_size", m.flash_size as u64),
         ("flash_used", u.flash),
@@ -192,31 +198,39 @@ fn the_budget_table_agrees() {
     assert_eq!(got, want);
 }
 
-/// //fw:memmap_tsv's blocks do not overlap, lie in their region, and end
-/// where the budget's use does: the flash blocks at the image's end, the
-/// RAM blocks at the end of the last RAM section.
+/// //fw:memmap_tsv is elf::memory_map, row by row; its blocks do not
+/// overlap, none is empty, and they end where the budget's use does: the
+/// flash blocks at the image's end, the RAM blocks at the end of the last
+/// RAM section.
 #[test]
 fn the_memory_map_agrees() {
     let (d, e) = firmware();
     let m = &elf::STM32F042F6;
     let u = elf::usage(&d, &e, m).expect("usage");
-    let rows = table("MEMMAP_TSV");
-    let mut last = (0u64, 0u64);
+    let rows = table("MEMMAP_TSV", &["section", "region", "start", "size"]);
+    let parsed: Vec<(String, String, u64, u64)> = rows
+        .iter()
+        .map(|r| {
+            let hex = r[2].strip_prefix("0x").unwrap_or_else(|| panic!("{}: start {} is not 0x hex", r[0], r[2]));
+            assert_eq!(hex.len(), 8, "{}: start {}", r[0], r[2]);
+            (r[0].clone(), r[1].clone(), u64::from_str_radix(hex, 16).expect("a hex start"), r[3].parse().expect("a size"))
+        })
+        .collect();
+    let want: Vec<(String, String, u64, u64)> = elf::memory_map(&d, &e, m)
+        .expect("memory map")
+        .into_iter()
+        .map(|b| (b.name, b.region.to_string(), b.start as u64, b.size as u64))
+        .collect();
+    assert_eq!(parsed, want);
     let mut ends = (m.flash_start as u64, m.ram_start as u64);
-    for r in &rows {
-        let start = u64::from_str_radix(r[2].trim_start_matches("0x"), 16).expect("a hex start");
-        let size: u64 = r[3].parse().expect("a size");
-        let (base, cell) = match r[1].as_str() {
-            "flash" => (m.flash_start as u64, &mut ends.0),
-            "ram" => (m.ram_start as u64, &mut ends.1),
-            other => panic!("region {}", other),
-        };
-        assert!(start >= base, "{} starts before its region", r[0]);
-        assert!(start >= last.0 + last.1 || last == (0, 0), "{} overlaps the block before it", r[0]);
-        last = (start, size);
+    let mut last_end = 0u64;
+    for (name, region, start, size) in &parsed {
+        assert!(*size > 0, "{} is empty", name);
+        assert!(*start >= last_end, "{} overlaps the block before it", name);
+        last_end = start + size;
+        let cell = if region == "flash" { &mut ends.0 } else { &mut ends.1 };
         *cell = (*cell).max(start + size);
     }
     assert_eq!(ends.0 - m.flash_start as u64, u.flash, "the flash blocks end elsewhere than the image");
     assert_eq!(ends.1 - m.ram_start as u64, u.ram, "the RAM blocks end elsewhere than the RAM use");
-    assert!(rows.iter().any(|r| r[0] == ".text"), "no .text");
 }

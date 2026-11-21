@@ -7,8 +7,8 @@
 //! flash_size, flash_used, flash_max_percent, flash_cap, ram_size,
 //! ram_used, stack_min, stack_min_free.
 //!
-//! MEMMAP, one block a row, by address: section, region (flash or ram),
-//! start (hex), size (bytes).
+//! MEMMAP, one block a row, by address (elf::memory_map): section, region
+//! (flash or ram), start (0x and 8 hex digits), size (bytes).
 use std::fmt::Write as _;
 use std::process::ExitCode;
 
