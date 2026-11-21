@@ -51,12 +51,14 @@ type Manifest struct {
 	Releases []Release `json:"releases"`
 }
 
-// Release is one GitHub release and its assets.
+// Release is one GitHub release and its assets, and where on
+// bt.hdlfactory.com they are published too, if anywhere.
 type Release struct {
 	Tag    string  `json:"tag"`
 	Title  string  `json:"title"`
 	Notes  string  `json:"notes"`
 	Assets []Asset `json:"assets"`
+	Bt     *Bt     `json:"bt,omitempty"`
 }
 
 // Asset is one file of a release. Exactly one of URL and Built is set.
@@ -113,6 +115,11 @@ func Parse(b []byte) (*Manifest, error) {
 		tags[r.Tag] = true
 		if r.Title == "" || len(r.Assets) == 0 {
 			return nil, fmt.Errorf("manifest: release %s needs a title and assets", r.Tag)
+		}
+		if r.Bt != nil {
+			if err := checkBtBase(r.Bt.Base); err != nil {
+				return nil, fmt.Errorf("manifest: release %s: %w", r.Tag, err)
+			}
 		}
 		names := map[string]bool{}
 		for _, a := range r.Assets {
@@ -345,6 +352,12 @@ type MirrorOptions struct {
 	Release string
 	// Run runs a gh command. Mirror calls it only when DryRun is false.
 	Run Runner
+	// To is where the files go: "github" (release assets, the default) or
+	// "bt" (bt.hdlfactory.com, for releases that name a bt base).
+	To string
+	// BtPassword is the bt upload password, for To "bt" without DryRun.
+	// It goes into the PUTs' login only, never into a log line.
+	BtPassword string
 }
 
 // Mirror checks every selected release first, each in its own directory
@@ -358,8 +371,23 @@ func Mirror(m *Manifest, o MirrorOptions) error {
 	}
 	var plans []plan
 	var problems []string
+	switch o.To {
+	case "", "github":
+	case "bt":
+		if !o.DryRun && o.BtPassword == "" {
+			return fmt.Errorf("$BT_UPLOAD_PASSWORD is not set; nothing checked or uploaded")
+		}
+	default:
+		return fmt.Errorf("--to %q: want github or bt", o.To)
+	}
 	for _, r := range m.Releases {
 		if o.Release != "" && r.Tag != o.Release {
+			continue
+		}
+		if o.To == "bt" && r.Bt == nil {
+			if o.Release != "" {
+				return fmt.Errorf("release %s names no bt base", r.Tag)
+			}
 			continue
 		}
 		ro := o.Options
@@ -391,6 +419,27 @@ func Mirror(m *Manifest, o MirrorOptions) error {
 	}
 	if len(problems) > 0 {
 		return fmt.Errorf("nothing uploaded:\n%s", strings.Join(problems, "\n"))
+	}
+	if o.To == "bt" {
+		if len(plans) == 0 {
+			return fmt.Errorf("no release names a bt base")
+		}
+		for _, p := range plans {
+			if o.DryRun {
+				for _, f := range p.files {
+					if strings.HasPrefix(f, "BUILT_DIR") {
+						return fmt.Errorf("%s: give --built_dir, so the built assets can be checked against bt", p.r.Tag)
+					}
+				}
+			}
+			if err := PublishBt(o.Client, p.r.Bt.Base, p.files, o.BtPassword, o.DryRun, o.Log); err != nil {
+				return fmt.Errorf("%s: %w", p.r.Tag, err)
+			}
+		}
+		if o.DryRun {
+			fmt.Fprintln(o.Log, "dry run: every file checked; nothing uploaded")
+		}
+		return nil
 	}
 	for _, p := range plans {
 		create := CreateCommand(m.Repo, p.r)
