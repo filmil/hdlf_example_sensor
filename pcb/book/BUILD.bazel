@@ -1,0 +1,204 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# The fab chapter's figures and tables for bazel-cad-book, which pins this
+# repository and takes them through its example_file rule. Each figure is
+# an SVG and a PNG, sized for the book at 300 dpi: about 1350 pixels for a
+# full-width figure and 700 for a half-width one (the text block is about
+# 4.5 in). The tables are tab-separated; the book sets them.
+load("@hdlf_rules_kicad//kicad:defs.bzl", "kicad_pos")
+load("@hdlf_rules_netlist//netlist:defs.bzl", "determinism_test")
+load("@rules_python//python:py_binary.bzl", "py_binary")
+load("@rules_python//python:py_test.bzl", "py_test")
+load(":book.bzl", "kicad_plot", "svg_png")
+
+package(default_visibility = ["//visibility:public"])
+
+# The PNGs' widths in pixels: full width and half width in the book.
+_FULL = 1350
+
+_HALF = 700
+
+# Each PNG's width, for book_test; //pcb:render_book's are 1200 wide.
+_PNG_WIDTHS = {
+    "assembly.png": 1350,
+    "b_cu.png": 700,
+    "bottom.png": 1200,
+    "drill.png": 700,
+    "f_cu.png": 700,
+    "f_silk.png": 700,
+    "top.png": 1200,
+}
+
+py_binary(
+    name = "book_png",
+    srcs = ["book_png.py"],
+    main = "book_png.py",
+)
+
+py_binary(
+    name = "svg_norm",
+    srcs = ["svg_norm.py"],
+    main = "svg_norm.py",
+)
+
+# The layer previews, a half-width figure each. The bottom copper is
+# mirrored, as seen from below.
+[kicad_plot(
+    name = name,
+    width = _HALF,
+    layers = layers,
+    options = options,
+    pcb = "//pcb:pcb",
+) for name, layers, options in [
+    ("f_cu", ["F.Cu", "Edge.Cuts"], []),
+    ("b_cu", ["B.Cu", "Edge.Cuts"], ["--mirror"]),
+    ("f_silk", ["F.Silkscreen", "F.Mask", "Edge.Cuts"], []),
+]]
+
+# The assembly drawing, full width: the outline and the fab layer, with
+# each part's outline, pads and designator. J2, the SWD header, is DNP:
+# sketched and crossed out.
+kicad_plot(
+    name = "assembly",
+    width = _FULL,
+    layers = [
+        "F.Fab",
+        "Edge.Cuts",
+    ],
+    options = [
+        "--sketch-pads-on-fab-layers",
+        "--sketch-DNP-footprints-on-fab-layers",
+        "--crossout-DNP-footprints-on-fab-layers",
+    ],
+    pcb = "//pcb:pcb",
+)
+
+py_binary(
+    name = "drill_svg",
+    srcs = ["drill_svg.py"],
+    main = "drill_svg.py",
+    deps = ["//pcb:pcb_lib"],
+)
+
+# The holes, from the Excellon files JLCPCB gets, on the board's outline.
+genrule(
+    name = "drill_map",
+    srcs = [
+        "//pcb:drill",
+        "//pcb:mech_json",
+    ],
+    outs = ["drill.svg"],
+    cmd = "$(execpath :drill_svg) --drill $(execpath //pcb:drill) --mech $(execpath //pcb:mech_json) --out $@",
+    tools = [":drill_svg"],
+)
+
+svg_png(
+    name = "drill",
+    width = _HALF,
+    src = ":drill_map",
+)
+
+# Every part, DNP ones too, for the placement table.
+kicad_pos(
+    name = "pos_all",
+    pcb = "//pcb:pcb",
+)
+
+py_binary(
+    name = "placement_tsv_tool",
+    srcs = ["placement_tsv.py"],
+    main = "placement_tsv.py",
+    deps = ["//pcb:pcb_lib"],
+)
+
+# Where the assembler puts each part (designator, value, package, x, y,
+# rotation, side, dnp), in the board's frame, for the book to draw.
+genrule(
+    name = "placement_tsv",
+    srcs = [
+        "//pcb:pos",
+        ":pos_all",
+        "//pcb:mech_json",
+    ],
+    outs = ["placement.tsv"],
+    cmd = "$(execpath :placement_tsv_tool) --pos $(execpath //pcb:pos) --pos_all $(execpath :pos_all) --mech $(execpath //pcb:mech_json) --out $@",
+    tools = [":placement_tsv_tool"],
+)
+
+py_binary(
+    name = "zip_tsv",
+    srcs = ["zip_tsv.py"],
+    main = "zip_tsv.py",
+)
+
+# The files of JLCPCB's ZIP (name, size, sha256), for the book's table.
+genrule(
+    name = "fab_package_tsv",
+    srcs = ["//pcb:jlcpcb"],
+    outs = ["fab_package.tsv"],
+    cmd = "$(execpath :zip_tsv) $< $@",
+    tools = [":zip_tsv"],
+)
+
+filegroup(
+    name = "figures",
+    srcs = [
+        ":assembly",
+        ":b_cu",
+        ":drill",
+        ":f_cu",
+        ":f_silk",
+        "//pcb:render_book",
+    ],
+)
+
+filegroup(
+    name = "tables",
+    srcs = [
+        ":fab_package_tsv",
+        ":placement_tsv",
+    ],
+)
+
+# The same bytes from two configurations.
+determinism_test(
+    name = "book_determinism_test",
+    target = ":book_outputs",
+)
+
+filegroup(
+    name = "book_outputs",
+    srcs = [
+        ":figures",
+        ":tables",
+    ],
+)
+
+py_test(
+    name = "book_test",
+    size = "small",
+    srcs = [
+        "book_png.py",
+        "book_test.py",
+        "drill_svg.py",
+        "svg_norm.py",
+    ],
+    data = [
+        ":fab_package_tsv",
+        ":figures",
+        ":placement_tsv",
+        "//pcb:jlcpcb",
+        "//pcb:mech_json",
+    ],
+    env = {
+        "FAB_PACKAGE_TSV": "$(rootpath :fab_package_tsv)",
+        "FAB_ZIP": "$(rootpath //pcb:jlcpcb)",
+        "FIGURES": "$(rootpaths :figures)",
+        "MECH_JSON": "$(rootpath //pcb:mech_json)",
+        "PLACEMENT_TSV": "$(rootpath :placement_tsv)",
+        "PNG_WIDTHS": json.encode(_PNG_WIDTHS),
+    },
+    imports = ["."],
+    main = "book_test.py",
+    deps = ["//pcb:pcb_lib"],
+)
