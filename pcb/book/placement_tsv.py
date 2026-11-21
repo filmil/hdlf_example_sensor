@@ -22,15 +22,31 @@ HEADER = ["designator", "value", "package", "x", "y", "rotation", "side", "dnp"]
 
 
 def rows(pos, pos_all, length, width):
+    """The table's rows. Fails on a designator twice, a part of --pos
+    that --pos_all lacks or has elsewhere, a part off the board, or a
+    field with a tab or a newline."""
+    for name, table in (("--pos", pos), ("--pos_all", pos_all)):
+        refs = [r["Ref"] for r in table]
+        twice = sorted({x for x in refs if refs.count(x) > 1})
+        if twice:
+            raise ValueError("%s lists %s twice" % (name, ", ".join(twice)))
+    by_ref = {r["Ref"]: r for r in pos_all}
+    for r in pos:
+        if r["Ref"] in by_ref and by_ref[r["Ref"]] != r:
+            raise ValueError("%s differs between --pos and --pos_all" % r["Ref"])
     placed = {r["Ref"] for r in pos}
     out = []
     for r in sorted(pos_all, key=lambda r: r["Ref"]):
+        for k in ("Ref", "Val", "Package", "Side"):
+            if any(c in r[k] for c in "\t\r\n"):
+                raise ValueError("%s: its %s has a tab or a newline" % (r["Ref"], k))
         # Page X; page Y grows down, the CSV's Y up: page y = -PosY.
         x = float(r["PosX"]) - gen.ORIGIN_X
         y = gen.ORIGIN_Y + width + float(r["PosY"])
         if not (0 <= x <= length and 0 <= y <= width):
             raise ValueError("%s at (%.3f, %.3f) in the board's frame, outside the board" % (r["Ref"], x, y))
-        rot = float(r["Rot"]) % 360
+        # Rounded first, so that -0.01 is 0.0, not 360.0.
+        rot = round(float(r["Rot"]), 1) % 360
         out.append([r["Ref"], r["Val"], r["Package"], "%.3f" % x, "%.3f" % y, "%.1f" % rot, r["Side"], "no" if r["Ref"] in placed else "yes"])
     extra = placed - {r["Ref"] for r in pos_all}
     if extra:

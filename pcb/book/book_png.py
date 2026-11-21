@@ -9,14 +9,24 @@ import re
 import subprocess
 import sys
 
-WIDTH = re.compile(r'<svg\b[^>]*\bwidth="([0-9.]+)mm"', re.S)
+# The <svg> element's own width attribute: after white space, so that
+# stroke-width and the like never match.
+WIDTH = re.compile(r'<svg\b[^>]*\swidth="([0-9.]+)mm"', re.S)
 
 
 def dpi_for(svg_text, px):
+    """The dpi at which svgpng draws the SVG px pixels wide: svgpng makes
+    it round(width_mm * dpi / 25.4) pixels, so a dpi correct to 6 decimals
+    gives px exactly."""
+    if px <= 0:
+        raise ValueError("a width of %d pixels" % px)
     m = WIDTH.search(svg_text)
     if not m:
         raise ValueError("the SVG has no width in mm")
-    return px * 25.4 / float(m.group(1))
+    mm = float(m.group(1))
+    if mm <= 0:
+        raise ValueError("the SVG is %s mm wide" % m.group(1))
+    return px * 25.4 / mm
 
 
 def main(argv):

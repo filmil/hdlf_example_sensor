@@ -23,40 +23,55 @@ import placement
 # One colour per tool, in the order of the tools' diameters.
 COLOURS = ["#1f77b4", "#d62728", "#2ca02c", "#9467bd", "#ff7f0e", "#8c564b", "#e377c2", "#17becf"]
 
-TOOL = re.compile(r"^T(\d+)C([0-9.]+)")
+TOOL = re.compile(r"^T(\d+)C([0-9.]+)$")
 SELECT = re.compile(r"^T(\d+)$")
+# The body commands kicad_drill writes that place no hole: absolute
+# coordinates, drill mode, end of program. Anything else is refused, so a
+# hole in a form this reader does not know is never left out.
+QUIET = {"G90", "G05", "M30"}
 POINT = re.compile(r"^X(-?[0-9.]+)Y(-?[0-9.]+)$")
 SLOT = re.compile(r"^X(-?[0-9.]+)Y(-?[0-9.]+)G85X(-?[0-9.]+)Y(-?[0-9.]+)$")
 
 
 def holes(text):
     """[(diameter, x1, y1, x2, y2)] of an Excellon file in decimal mm, in
-    its own coordinates; x2, y2 equal x1, y1 for a round hole."""
-    tools, out, tool, body = {}, [], None, False
+    its own coordinates; x2, y2 equal x1, y1 for a round hole. Tools are
+    numbers (T01 is T1); T0 unloads the tool."""
+    tools, out, tool, body, metric = {}, [], None, False, False
     for line in text.splitlines():
         line = line.strip()
+        if not line or line.startswith(";"):
+            continue
         if line == "%":
             body = True
             continue
         if not body:
             m = TOOL.match(line)
             if m:
-                tools[m.group(1)] = float(m.group(2))
+                tools[int(m.group(1))] = float(m.group(2))
+            elif line == "METRIC" or line.startswith("METRIC,"):
+                metric = True
             elif line.startswith("INCH"):
                 raise ValueError("an Excellon file in inches; want METRIC")
             continue
+        if not metric:
+            raise ValueError("an Excellon file without METRIC in its header")
         m = SELECT.match(line)
         if m:
-            if m.group(1) != "0" and m.group(1) not in tools:
+            t = int(m.group(1))
+            if t != 0 and t not in tools:
                 raise ValueError("tool T%s is not defined" % m.group(1))
-            tool = m.group(1)
+            tool = t or None
             continue
         m = SLOT.match(line) or POINT.match(line)
         if m:
-            if tool not in tools:
-                raise ValueError("a hole before any tool: %s" % line)
+            if tool is None:
+                raise ValueError("a hole with no tool: %s" % line)
             v = [float(g) for g in m.groups()]
             out.append((tools[tool], v[0], v[1], v[-2], v[-1]))
+            continue
+        if line not in QUIET:
+            raise ValueError("an Excellon command this reader does not know: %s" % line)
     return out
 
 
@@ -78,7 +93,9 @@ def svg(found, mech):
                 raise ValueError("a %.3f mm hole at (%.3f, %.3f) in the board's frame, outside the board" % (d, x, y))
 
     sizes = sorted({h[0] for h in found})
-    colour = {d: COLOURS[i % len(COLOURS)] for i, d in enumerate(sizes)}
+    if len(sizes) > len(COLOURS):
+        raise ValueError("%d drill sizes, but only %d colours" % (len(sizes), len(COLOURS)))
+    colour = {d: COLOURS[i] for i, d in enumerate(sizes)}
     out = [
         '<svg xmlns="http://www.w3.org/2000/svg" width="%gmm" height="%gmm" viewBox="0 0 %g %g">' % (length, width, length, width),
         '<rect x="0" y="0" width="%g" height="%g" fill="#f4f1e8" stroke="#555555" stroke-width="0.15"/>' % (length, width),
@@ -112,15 +129,14 @@ def main(argv):
         sys.stderr.write("drill_svg: no .drl file in %s\n" % a.drill)
         return 1
     found = []
-    for f in files:
-        with open(f, encoding="utf-8") as fh:
-            found += holes(fh.read())
-    if not found:
-        sys.stderr.write("drill_svg: no hole in %s\n" % ", ".join(files))
-        return 1
-    with open(a.mech, encoding="utf-8") as fh:
-        mech = json.load(fh)
     try:
+        for f in files:
+            with open(f, encoding="utf-8") as fh:
+                found += holes(fh.read())
+        if not found:
+            raise ValueError("no hole in %s" % ", ".join(files))
+        with open(a.mech, encoding="utf-8") as fh:
+            mech = json.load(fh)
         text = svg(found, mech)
     except ValueError as e:
         sys.stderr.write("drill_svg: %s\n" % e)
