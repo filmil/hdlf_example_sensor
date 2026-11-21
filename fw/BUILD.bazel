@@ -70,11 +70,52 @@ genrule(
     tools = ["//fw/tools:elf2bin"],
 )
 
+# The budget and the memory map as tables, for the book (bazel-cad-book
+# draws them): from the ELF, through //fw/tools:elf, as budget_test's
+# numbers are; budget_test checks that they agree.
+genrule(
+    name = "fw_tables",
+    srcs = [":fw"],
+    outs = [
+        "budget.tsv",
+        "memmap.tsv",
+    ],
+    cmd = "$(execpath //fw/tools:fw_tables) $< $(execpath budget.tsv) $(execpath memmap.tsv)",
+    tools = ["//fw/tools:fw_tables"],
+)
+
+filegroup(
+    name = "budget_tsv",
+    srcs = ["budget.tsv"],
+)
+
+filegroup(
+    name = "memmap_tsv",
+    srcs = ["memmap.tsv"],
+)
+
+# The book's tables, the same from two configurations.
+determinism_test(
+    name = "tables_determinism_test",
+    size = "small",
+    target = ":book_tables",
+)
+
+filegroup(
+    name = "book_tables",
+    srcs = [
+        ":budget_tsv",
+        ":memmap_tsv",
+        ":pinout_tsv",
+    ],
+)
+
 # The ELF fits 32 KB of flash and 6 KB of RAM with 1 KB of stack; a chip
 # one byte short fails; the vector table is sound; fw.bin is its image.
 # Also: its use is the one recorded in the test, so a PR that changes the
 # size shows by how much, and it leaves headroom (flash at most 90 %, 2 KB
-# of stack). --nocapture puts the numbers in the test log; one thread
+# of stack). The book's budget and memory-map tables agree with it.
+# --nocapture puts the numbers in the test log; one thread
 # keeps the lines in order.
 rust_test(
     name = "budget_test",
@@ -85,12 +126,16 @@ rust_test(
         "--test-threads=1",
     ],
     data = [
+        ":budget_tsv",
         ":fw",
         ":fw_bin",
+        ":memmap_tsv",
     ],
     env = {
+        "BUDGET_TSV": "$(rootpath :budget_tsv)",
         "FW_BIN": "$(rootpath :fw_bin)",
         "FW_ELF": "$(rootpath :fw)",
+        "MEMMAP_TSV": "$(rootpath :memmap_tsv)",
     },
     deps = ["//fw/tools:elf"],
 )
@@ -145,12 +190,15 @@ _PINMAP_INPUTS = {
 
 # The inputs are tools, not srcs: tools build for the build machine, while
 # srcs would follow :fw's transition to the chip, where the netlist's own
-# tools have no toolchain.
-genrule(
-    name = "pins_rs",
-    outs = ["pins.rs"],
+# tools have no toolchain. pins_rs is the pin map as Rust; pinout_tsv is
+# the pinout as a table for the book (bazel-cad-book draws it): one row
+# per pin of U1, from the same checks.
+[genrule(
+    name = name,
+    outs = [out],
     cmd = " ".join([
         "$(execpath :gen_pins)",
+        "--format " + fmt,
         "--netlist $(execpath //elec:netlist)",
         "--symbols $(execpath @kicad_libs//:symbols/MCU_ST_STM32F0.kicad_sym)",
         "$$(for m in $(execpaths //third_party/crates:stm32-metapac-metadata); do echo --metadata $$m; done)",
@@ -158,6 +206,26 @@ genrule(
         "--out $@",
     ]),
     tools = [":gen_pins"] + _PINMAP_INPUTS.values(),
+) for name, out, fmt in [
+    ("pins_rs", "pins.rs", "rust"),
+    ("pinout_tsv", "pinout.tsv", "tsv"),
+]]
+
+# The table and pins.rs agree, net by net: the same port and alternate
+# function.
+py_test(
+    name = "pinout_tsv_test",
+    size = "small",
+    srcs = ["test/pinout_tsv_test.py"],
+    data = [
+        ":pins_rs",
+        ":pinout_tsv",
+    ],
+    env = {
+        "PINOUT_TSV": "$(rootpath :pinout_tsv)",
+        "PINS_RS": "$(rootpath :pins_rs)",
+    },
+    main = "test/pinout_tsv_test.py",
 )
 
 # The pin map as a crate, for the firmware and for host tests.

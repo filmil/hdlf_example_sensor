@@ -190,3 +190,49 @@ fn checks_the_budget_at_its_edges() {
     assert!(elf::check(&elf::Usage { flash: fits.flash + 1, ram: fits.ram }, m).is_err());
     assert!(elf::check(&elf::Usage { flash: fits.flash, ram: fits.ram + 1 }, m).is_err());
 }
+
+fn blocks(segs: &[Seg], secs: &[Sec]) -> Result<Vec<(String, &'static str, u32, u32)>, String> {
+    let d = build(segs, secs);
+    let e = elf::parse(&d).unwrap();
+    elf::memory_map(&d, &e, mem()).map(|v| v.into_iter().map(|b| (b.name, b.region, b.start, b.size)).collect())
+}
+
+#[test]
+fn the_memory_map_has_sections_and_initial_values() {
+    // .text, then .data's initial values in flash, after 4 bytes of
+    // padding that no block may claim. Given out of order; a section that
+    // is not allocated, and an empty one, are left out.
+    let got = blocks(
+        &[Seg(FLASH, vec![0; 8]), Seg(FLASH + 12, vec![0; 4])],
+        &[Sec(".bss", ALLOC | 1, RAM + 4, 16), Sec(".text", ALLOC | 4, FLASH, 8), Sec(".data", ALLOC | 1, RAM, 4), Sec(".comment", 0, 0, 9), Sec(".empty", ALLOC, FLASH + 8, 0)],
+    )
+    .unwrap();
+    let want = vec![
+        (".text".to_string(), "flash", FLASH, 8),
+        (elf::LOAD_IMAGE.to_string(), "flash", FLASH + 12, 4),
+        (".data".to_string(), "ram", RAM, 4),
+        (".bss".to_string(), "ram", RAM + 4, 16),
+    ];
+    assert_eq!(got, want);
+}
+
+#[test]
+fn the_memory_map_without_initial_values() {
+    let got = blocks(&[Seg(FLASH, vec![0; 8])], &[Sec(".text", ALLOC | 4, FLASH, 8), Sec(".bss", ALLOC | 1, RAM, 16)]).unwrap();
+    assert!(got.iter().all(|b| b.0 != elf::LOAD_IMAGE), "{:?}", got);
+    assert_eq!(got.len(), 2);
+}
+
+#[test]
+fn the_memory_map_refuses_sections_out_of_their_region() {
+    let m = mem();
+    let flash_end = FLASH + m.flash_size;
+    let ram_end = RAM + m.ram_size;
+    for (what, sec) in [
+        ("past flash", Sec(".text", ALLOC, flash_end - 4, 8)),
+        ("past RAM", Sec(".bss", ALLOC, ram_end - 4, 8)),
+        ("nowhere", Sec(".odd", ALLOC, 0x4000_0000, 4)),
+    ] {
+        assert!(blocks(&[Seg(FLASH, vec![0; 4])], &[sec]).is_err(), "{}: accepted", what);
+    }
+}

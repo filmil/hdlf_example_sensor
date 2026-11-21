@@ -81,7 +81,9 @@ directory, which the link step does see.
 
 | Test | Checks |
 |---|---|
-| `:budget_test` | The ELF fits 32 KB of flash and 6 KB of RAM with at least 1 KB left for the stack, and prints the margin. Its use is exactly the one recorded in the test (`RECORDED`), so a change that grows or shrinks the firmware must update it, and its diff shows by how much. It leaves headroom: flash at most 90 % of the chip, and at least 2 KB of RAM free for the stack. A change that needs the reserve raises the cap in the test, in the same PR, with the reason. The same firmware on a chip one byte too small, in flash or in RAM, must fail. The vector table is sound, and `fw.bin` is the ELF's image. |
+| `:budget_test` | The ELF fits 32 KB of flash and 6 KB of RAM with at least 1 KB left for the stack, and prints the margin. Its use is exactly the one recorded in the test (`RECORDED`), so a change that grows or shrinks the firmware must update it, and its diff shows by how much. It leaves headroom: flash at most 90 % of the chip, and at least 2 KB of RAM free for the stack. A change that needs the reserve raises the cap (`FLASH_MAX_PERCENT` in `fw/tools/elf.rs`, shared with the book's budget table), in the same PR, with the reason. The book's budget and memory-map tables agree with it. The same firmware on a chip one byte too small, in flash or in RAM, must fail. The vector table is sound, and `fw.bin` is the ELF's image. |
+| `:pinout_tsv_test` | The book's pinout table agrees with `pins.rs`: every pin of `pins.rs` is a row with the same net, port and alternate function, and each net is on one row. |
+| `:tables_determinism_test` | The book's three tables are the same bytes from two configurations. |
 | `:fw_determinism_test` | The ELF and `fw.bin` are the same bytes from two configurations. |
 | `:licence_test` | Every crate of `Cargo.lock` is in `third_party/crates/crate_licences.txt`, once, at its version, and its SPDX expression offers MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause or Zlib. The one exception is unicode-ident: it is `(MIT OR Apache-2.0) AND Unicode-3.0`, and accepted because it only runs on the build machine, inside proc macros. |
 | `tools:elf_test` | The ELF reader, on small ELF files the test writes byte by byte, malformed ones included. |
@@ -147,6 +149,20 @@ is an error.
 `:pinmap_test` runs the generator on the real netlist, and on edits of it
 that must fail, one for each check above. `:pins_test` checks the
 generated crate against what `elec/circuit.py` wires.
+
+## Tables for the book
+
+The book, bazel-cad-book, draws three figures of this firmware from
+tables built here, so a change to the board or the firmware changes its
+figures too. Each is tab-separated, with a header row:
+
+| Target | File | What |
+|---|---|---|
+| `:pinout_tsv` | `pinout.tsv` | One row per pin of U1: its number, the symbol's name, the board's net, the port pin the firmware uses, what `pins.json` asks of it, and the alternate function. It comes from the same checks that write `pins.rs`; `:pinout_tsv_test` checks that the two agree. |
+| `:budget_tsv` | `budget.tsv` | Flash and RAM: the chip's size, the use, the 90 % cap and the stack reserve. `:budget_test` checks them against its own. |
+| `:memmap_tsv` | `memmap.tsv` | Each allocated section, by address: its region (flash or RAM), start and size, then the part of the flash image that holds RAM sections' initial values. `:budget_test` checks that the flash blocks end where the image does, and the RAM blocks where the RAM use does. |
+
+`:tables_determinism_test` checks that two builds give the same bytes.
 
 ## Flashing the board
 
