@@ -117,7 +117,7 @@ func Parse(b []byte) (*Manifest, error) {
 			return nil, fmt.Errorf("manifest: release %s needs a title and assets", r.Tag)
 		}
 		if r.Bt != nil {
-			if err := checkBtBase(r.Bt.Base); err != nil {
+			if err := checkBtBase(r.Bt.Base, BtHost); err != nil {
 				return nil, fmt.Errorf("manifest: release %s: %w", r.Tag, err)
 			}
 		}
@@ -358,6 +358,49 @@ type MirrorOptions struct {
 	// BtPassword is the bt upload password, for To "bt" without DryRun.
 	// It goes into the PUTs' login only, never into a log line.
 	BtPassword string
+	// BtHost is where bt bases must be; empty is BtHost. Tests point it
+	// at a local server.
+	BtHost string
+}
+
+// btRelease is one release to publish to bt: its tag, base and files.
+type btRelease struct {
+	tag, base string
+	files     []string
+}
+
+// mirrorBt plans every release first, fetching every URL; only when none
+// is published with other bytes does it upload anything (or, in a dry
+// run, print what it would).
+func mirrorBt(rs []btRelease, o MirrorOptions) error {
+	if len(rs) == 0 {
+		return fmt.Errorf("no release names a bt base")
+	}
+	host := o.BtHost
+	if host == "" {
+		host = BtHost
+	}
+	var uploads []BtUpload
+	var problems []string
+	for _, r := range rs {
+		u, err := PlanBt(o.Client, host, r.base, r.files, o.Log)
+		if err != nil {
+			problems = append(problems, fmt.Sprintf("%s: %v", r.tag, err))
+			continue
+		}
+		uploads = append(uploads, u...)
+	}
+	if len(problems) > 0 {
+		return fmt.Errorf("nothing uploaded to bt:\n  %s", strings.Join(problems, "\n  "))
+	}
+	if o.DryRun {
+		for _, u := range uploads {
+			fmt.Fprintf(o.Log, "would PUT %s (%d bytes, sha256 %s)\n", u.URL, u.size, u.sha256)
+		}
+		fmt.Fprintln(o.Log, "dry run: every file checked; nothing uploaded")
+		return nil
+	}
+	return UploadBt(o.Client, uploads, o.BtPassword, o.Log)
 }
 
 // Mirror checks every selected release first, each in its own directory
@@ -390,6 +433,13 @@ func Mirror(m *Manifest, o MirrorOptions) error {
 			}
 			continue
 		}
+		if o.To == "bt" && o.BuiltDir == "" {
+			for _, a := range r.Assets {
+				if a.Built != nil {
+					return fmt.Errorf("%s/%s: built by %s; --to=bt needs --built_dir, also for a dry run", r.Tag, a.Name, a.Built.Script)
+				}
+			}
+		}
 		ro := o.Options
 		ro.WorkDir = filepath.Join(o.WorkDir, r.Tag)
 		if err := os.MkdirAll(ro.WorkDir, 0o755); err != nil {
@@ -421,25 +471,11 @@ func Mirror(m *Manifest, o MirrorOptions) error {
 		return fmt.Errorf("nothing uploaded:\n%s", strings.Join(problems, "\n"))
 	}
 	if o.To == "bt" {
-		if len(plans) == 0 {
-			return fmt.Errorf("no release names a bt base")
-		}
+		var rs []btRelease
 		for _, p := range plans {
-			if o.DryRun {
-				for _, f := range p.files {
-					if strings.HasPrefix(f, "BUILT_DIR") {
-						return fmt.Errorf("%s: give --built_dir, so the built assets can be checked against bt", p.r.Tag)
-					}
-				}
-			}
-			if err := PublishBt(o.Client, p.r.Bt.Base, p.files, o.BtPassword, o.DryRun, o.Log); err != nil {
-				return fmt.Errorf("%s: %w", p.r.Tag, err)
-			}
+			rs = append(rs, btRelease{tag: p.r.Tag, base: p.r.Bt.Base, files: p.files})
 		}
-		if o.DryRun {
-			fmt.Fprintln(o.Log, "dry run: every file checked; nothing uploaded")
-		}
-		return nil
+		return mirrorBt(rs, o)
 	}
 	for _, p := range plans {
 		create := CreateCommand(m.Repo, p.r)

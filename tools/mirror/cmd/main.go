@@ -27,13 +27,15 @@
 // reads it from $BT_UPLOAD_PASSWORD only for --to=bt --dry_run=false. It
 // never prints it, and a dry run does not need it:
 //
-//	read -rs BT_UPLOAD_PASSWORD < <(kubectl -n bt get secret bt-upload -o jsonpath='{.data.password}' | base64 -d)
+//	IFS= read -r BT_UPLOAD_PASSWORD < <(kubectl -n bt get secret bt-upload -o jsonpath='{.data.password}' | base64 -d; echo)
 //	export BT_UPLOAD_PASSWORD
 //	bazel run //tools/mirror -- --to=bt --dry_run=false --release=TAG [--built_dir=...]
 //	unset BT_UPLOAD_PASSWORD
 //
 // A file already on bt with the same bytes is skipped; one with other
-// bytes stops the run before anything is uploaded.
+// bytes stops the run before anything is uploaded, in any release.
+// (read is a shell builtin, so the password is in no command line; IFS=
+// keeps its spaces; echo gives read the newline the secret lacks.)
 package main
 
 import (
