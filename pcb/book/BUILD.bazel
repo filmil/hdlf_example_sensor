@@ -13,14 +13,11 @@ load(":book.bzl", "kicad_plot", "svg_png")
 
 package(default_visibility = ["//visibility:public"])
 
-# The PNGs' widths in pixels: full width and half width in the book.
-_FULL = 1350
-
+# The PNGs' width in pixels: half width in the book (1350 would be full).
 _HALF = 700
 
 # Each PNG's width, for book_test; //pcb:render_book's are 1200 wide.
 _PNG_WIDTHS = {
-    "assembly.png": 1350,
     "b_cu.png": 700,
     "bottom.png": 1200,
     "drill.png": 700,
@@ -55,23 +52,9 @@ py_binary(
     ("f_silk", ["F.Silkscreen", "F.Mask", "Edge.Cuts"], []),
 ]]
 
-# The assembly drawing, full width: the outline and the fab layer, with
-# each part's outline, pads and designator. J2, the SWD header, is DNP:
-# sketched and crossed out.
-kicad_plot(
-    name = "assembly",
-    width = _FULL,
-    layers = [
-        "F.Fab",
-        "Edge.Cuts",
-    ],
-    options = [
-        "--sketch-pads-on-fab-layers",
-        "--sketch-DNP-footprints-on-fab-layers",
-        "--crossout-DNP-footprints-on-fab-layers",
-    ],
-    pcb = "//pcb:pcb",
-)
+# No assembly drawing: KiCad 9.0.9 cannot plot F.Fab without each part's
+# value (no --exclude-value), and on this board the values overlap. The
+# book draws it from placement.tsv instead.
 
 py_binary(
     name = "drill_svg",
@@ -143,7 +126,6 @@ genrule(
 filegroup(
     name = "figures",
     srcs = [
-        ":assembly",
         ":b_cu",
         ":drill",
         ":f_cu",
