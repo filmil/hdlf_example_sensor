@@ -163,7 +163,9 @@ py_test(
         "book_png.py",
         "book_test.py",
         "drill_svg.py",
+        "placement_tsv.py",
         "svg_norm.py",
+        "zip_tsv.py",
     ],
     data = [
         ":fab_package_tsv",
