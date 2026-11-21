@@ -8,6 +8,7 @@
 load("@hdlf_rules_fab//fab:defs.bzl", "fab_package", "fab_package_test", "fab_rules")
 load("@hdlf_rules_kicad//kicad:defs.bzl", "kicad_autoroute", "kicad_drc_test", "kicad_drill", "kicad_gerbers", "kicad_pcb", "kicad_pos", "kicad_render", "kicad_step")
 load("@hdlf_rules_netlist//netlist:defs.bzl", "determinism_test", "netlist_parity_test")
+load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("@rules_python//python:py_binary.bzl", "py_binary")
 load("@rules_python//python:py_library.bzl", "py_library")
 load("@rules_python//python:py_test.bzl", "py_test")
@@ -335,6 +336,23 @@ kicad_render(
     name = "render_parts",
     models = _MODELS,
     pcb = ":pcb",
+)
+
+# For the book (bazel-cad-book), at the size of a figure there: 1200 by
+# 800 pixels, top and bottom.
+kicad_render(
+    name = "render_book",
+    height = 800,
+    models = _MODELS,
+    pcb = ":pcb",
+    width = 1200,
+)
+
+# mech/mechanics.bzl's numbers, for the book's figures (//pcb/book).
+write_file(
+    name = "mech_json",
+    out = "mech.json",
+    content = [_MECH],
 )
 
 # The fab outputs, the same from two configurations.
