@@ -54,6 +54,13 @@ curl -fsS "$U" | sha256sum          # b4b53ba21a82ef7e3d4c47df2952adf5fa494f499b
 curl -fsS "$U.torrent" | sha256sum  # f84502aca8273ad7b405899c7df52faaf0e285a83b43293ea1c1f4f21645de01
 ```
 
+`tools/mirror` also publishes them, with the rest of the release
+`mirror-dfu-util-0.11`, to the same place: `bazel run //tools/mirror --
+--to=bt --dry_run=false --release=mirror-dfu-util-0.11
+--built_dir=/tmp/dfu-util`, with `$BT_UPLOAD_PASSWORD` set (see
+`tools/mirror/cmd/main.go`). Its `.torrent` is byte for byte the one here.
+A file either way puts there first is skipped by the other.
+
 ## The .torrent
 
 `dfu-util-0.11.tar.gz.torrent` is what bazel_rules_kicad's

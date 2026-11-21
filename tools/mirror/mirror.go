@@ -51,12 +51,14 @@ type Manifest struct {
 	Releases []Release `json:"releases"`
 }
 
-// Release is one GitHub release and its assets.
+// Release is one GitHub release and its assets, and where on
+// bt.hdlfactory.com they are published too, if anywhere.
 type Release struct {
 	Tag    string  `json:"tag"`
 	Title  string  `json:"title"`
 	Notes  string  `json:"notes"`
 	Assets []Asset `json:"assets"`
+	Bt     *Bt     `json:"bt,omitempty"`
 }
 
 // Asset is one file of a release. Exactly one of URL and Built is set.
@@ -113,6 +115,11 @@ func Parse(b []byte) (*Manifest, error) {
 		tags[r.Tag] = true
 		if r.Title == "" || len(r.Assets) == 0 {
 			return nil, fmt.Errorf("manifest: release %s needs a title and assets", r.Tag)
+		}
+		if r.Bt != nil {
+			if err := checkBtBase(r.Bt.Base, BtHost); err != nil {
+				return nil, fmt.Errorf("manifest: release %s: %w", r.Tag, err)
+			}
 		}
 		names := map[string]bool{}
 		for _, a := range r.Assets {
@@ -345,6 +352,55 @@ type MirrorOptions struct {
 	Release string
 	// Run runs a gh command. Mirror calls it only when DryRun is false.
 	Run Runner
+	// To is where the files go: "github" (release assets, the default) or
+	// "bt" (bt.hdlfactory.com, for releases that name a bt base).
+	To string
+	// BtPassword is the bt upload password, for To "bt" without DryRun.
+	// It goes into the PUTs' login only, never into a log line.
+	BtPassword string
+	// BtHost is where bt bases must be; empty is BtHost. Tests point it
+	// at a local server.
+	BtHost string
+}
+
+// btRelease is one release to publish to bt: its tag, base and files.
+type btRelease struct {
+	tag, base string
+	files     []string
+}
+
+// mirrorBt plans every release first, fetching every URL; only when none
+// is published with other bytes does it upload anything (or, in a dry
+// run, print what it would).
+func mirrorBt(rs []btRelease, o MirrorOptions) error {
+	if len(rs) == 0 {
+		return fmt.Errorf("no release names a bt base")
+	}
+	host := o.BtHost
+	if host == "" {
+		host = BtHost
+	}
+	var uploads []BtUpload
+	var problems []string
+	for _, r := range rs {
+		u, err := PlanBt(o.Client, host, r.base, r.files, o.Log)
+		if err != nil {
+			problems = append(problems, fmt.Sprintf("%s: %v", r.tag, err))
+			continue
+		}
+		uploads = append(uploads, u...)
+	}
+	if len(problems) > 0 {
+		return fmt.Errorf("nothing uploaded to bt:\n  %s", strings.Join(problems, "\n  "))
+	}
+	if o.DryRun {
+		for _, u := range uploads {
+			fmt.Fprintf(o.Log, "would PUT %s (%d bytes, sha256 %s)\n", u.URL, u.size, u.sha256)
+		}
+		fmt.Fprintln(o.Log, "dry run: every file checked; nothing uploaded")
+		return nil
+	}
+	return UploadBt(o.Client, uploads, o.BtPassword, o.Log)
 }
 
 // Mirror checks every selected release first, each in its own directory
@@ -358,9 +414,31 @@ func Mirror(m *Manifest, o MirrorOptions) error {
 	}
 	var plans []plan
 	var problems []string
+	switch o.To {
+	case "", "github":
+	case "bt":
+		if !o.DryRun && o.BtPassword == "" {
+			return fmt.Errorf("$BT_UPLOAD_PASSWORD is not set; nothing checked or uploaded")
+		}
+	default:
+		return fmt.Errorf("--to %q: want github or bt", o.To)
+	}
 	for _, r := range m.Releases {
 		if o.Release != "" && r.Tag != o.Release {
 			continue
+		}
+		if o.To == "bt" && r.Bt == nil {
+			if o.Release != "" {
+				return fmt.Errorf("release %s names no bt base", r.Tag)
+			}
+			continue
+		}
+		if o.To == "bt" && o.BuiltDir == "" {
+			for _, a := range r.Assets {
+				if a.Built != nil {
+					return fmt.Errorf("%s/%s: built by %s; --to=bt needs --built_dir, also for a dry run", r.Tag, a.Name, a.Built.Script)
+				}
+			}
 		}
 		ro := o.Options
 		ro.WorkDir = filepath.Join(o.WorkDir, r.Tag)
@@ -391,6 +469,13 @@ func Mirror(m *Manifest, o MirrorOptions) error {
 	}
 	if len(problems) > 0 {
 		return fmt.Errorf("nothing uploaded:\n%s", strings.Join(problems, "\n"))
+	}
+	if o.To == "bt" {
+		var rs []btRelease
+		for _, p := range plans {
+			rs = append(rs, btRelease{tag: p.r.Tag, base: p.r.Bt.Base, files: p.files})
+		}
+		return mirrorBt(rs, o)
 	}
 	for _, p := range plans {
 		create := CreateCommand(m.Repo, p.r)

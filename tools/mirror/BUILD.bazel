@@ -13,7 +13,10 @@ load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
 
 go_library(
     name = "mirror_lib",
-    srcs = ["mirror.go"],
+    srcs = [
+        "bt.go",
+        "mirror.go",
+    ],
     importpath = "github.com/filmil/hdlf_example_sensor/tools/mirror",
     visibility = ["//visibility:private"],
 )
@@ -22,6 +25,7 @@ go_test(
     name = "mirror_test",
     size = "small",
     srcs = [
+        "bt_test.go",
         "mirror_test.go",
         "sensor_test.go",
     ],

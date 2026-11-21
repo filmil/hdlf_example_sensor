@@ -20,6 +20,22 @@
 // before running any command if a file does not match the manifest, in
 // any release. gh refuses to replace an asset that
 // is already in the release.
+//
+// Publish to bt.hdlfactory.com (the operator only), each release that
+// names a bt base: its checked files, each with a .torrent. The password
+// is the Secret bt/bt-upload's; set it in your own shell, and this tool
+// reads it from $BT_UPLOAD_PASSWORD only for --to=bt --dry_run=false. It
+// never prints it, and a dry run does not need it:
+//
+//	IFS= read -r BT_UPLOAD_PASSWORD < <(kubectl -n bt get secret bt-upload -o jsonpath='{.data.password}' | base64 -d; echo)
+//	export BT_UPLOAD_PASSWORD
+//	bazel run //tools/mirror -- --to=bt --dry_run=false --release=TAG [--built_dir=...]
+//	unset BT_UPLOAD_PASSWORD
+//
+// A file already on bt with the same bytes is skipped; one with other
+// bytes stops the run before anything is uploaded, in any release.
+// (read is a shell builtin, so the password is in no command line; IFS=
+// keeps its spaces; echo gives read the newline the secret lacks.)
 package main
 
 import (
@@ -44,6 +60,7 @@ func run() error {
 	builtDir := flag.String("built_dir", "", "a directory with the built assets, by name; upstream files found there by name are not downloaded")
 	release := flag.String("release", "", "only this release tag (default: all)")
 	workDir := flag.String("work_dir", "", "where to download (default: a new temporary directory)")
+	to := flag.String("to", "github", "where to upload: github (release assets) or bt (bt.hdlfactory.com, with $BT_UPLOAD_PASSWORD)")
 	flag.Parse()
 	path := *manifestPath
 	if !filepath.IsAbs(path) {
@@ -73,6 +90,14 @@ func run() error {
 		defer os.RemoveAll(d)
 		*workDir = d
 	}
+	// The password, for a real upload to bt only; never printed.
+	password := ""
+	if *to == "bt" && !*dryRun {
+		password = os.Getenv("BT_UPLOAD_PASSWORD")
+		if password == "" {
+			return fmt.Errorf("--to=bt --dry_run=false needs $BT_UPLOAD_PASSWORD, the Secret bt/bt-upload's password, set in your shell; nothing checked or uploaded")
+		}
+	}
 	return mirror.Mirror(m, mirror.MirrorOptions{
 		Options: mirror.Options{
 			Client:   &http.Client{Timeout: 30 * time.Minute},
@@ -80,9 +105,11 @@ func run() error {
 			BuiltDir: *builtDir,
 			Log:      os.Stdout,
 		},
-		DryRun:  *dryRun,
-		Release: *release,
-		Run:     runCommand,
+		DryRun:     *dryRun,
+		Release:    *release,
+		Run:        runCommand,
+		To:         *to,
+		BtPassword: password,
 	})
 }
 
