@@ -11,18 +11,23 @@
   made-up input.
 """
 
+import contextlib
 import hashlib
+import io
 import json
 import os
 import struct
 import sys
+import tempfile
 import unittest
 import zipfile
 
 import book_png
 import drill_svg
 import placement
+import placement_tsv
 import svg_norm
+import zip_tsv
 
 MAX_BYTES = 300 * 1024
 
@@ -114,9 +119,95 @@ class UnitTest(unittest.TestCase):
             drill_svg.holes("M48\nINCH\n%\n")
 
     def test_book_png_dpi(self):
-        self.assertAlmostEqual(book_png.dpi_for('<svg xmlns="x" width="42.7228mm" height="26mm">', 1350), 1350 * 25.4 / 42.7228)
+        dpi = book_png.dpi_for('<svg:rect width="1mm"/><svg xmlns="x" stroke-width="0.15mm" width="42.7228mm" height="26mm">', 1350)
+        self.assertAlmostEqual(dpi, 1350 * 25.4 / 42.7228)
+        # svgpng's width: round(mm * dpi / 25.4), with the dpi as passed.
+        self.assertEqual(int(42.7228 * float("%.6f" % dpi) / 25.4 + 0.5), 1350)
+        for bad, px in (('<svg width="100" height="50">', 700), ('<svg width="0mm">', 700), ('<svg width="40mm">', 0)):
+            with self.assertRaises(ValueError):
+                book_png.dpi_for(bad, px)
+
+    def test_excellon_errors(self):
+        head = "M48\nMETRIC\nT1C0.300\n%\n"
+        for bad in (
+            head + "X1.0Y1.0\n",  # no tool
+            head + "T2\n",  # an undefined tool
+            head + "T1\nG91\n",  # incremental coordinates
+            head + "T1\nG00X1.0Y1.0\n",  # a routed slot
+            head + "T1\nX1.0Y2.0\nT0\nX3.0Y4.0\n",  # a hole after T0 unloads
+            head + "T1\nX0010Y0020\n",  # fixed-point coordinates
+            "M48\nT1C0.300\n%\nT1\nX1.0Y1.0\n",  # no METRIC
+            "M48\nT1C0.300\n%\n",  # no METRIC, empty body
+            "M48\nMETRIC\nT1C0.300\nT1\nX1.0Y1.0\n",  # no %
+            "M48\nMETRIC,TZ\nT1C0.300\n%\n",  # fixed-point units
+            "M48\nMETRIC\nICI,ON\nT1C0.300\n%\n",  # incremental, in the header
+            "M48\nMETRIC\nT0C0.300\n%\n",  # T0 defined
+            "M48\nMETRIC\nT1C0.300\nT01C0.500\n%\n",  # a tool twice
+            "M48\nMETRIC\nT1C0.000\n%\n",  # no diameter
+        ):
+            with self.assertRaises(ValueError, msg=bad):
+                drill_svg.holes(bad)
+        # T01 is T1; T0 unloads.
+        self.assertEqual(drill_svg.holes("M48\nMETRIC\nT01C0.300\n%\nT1\nX1.0Y2.0\nT0\nM30\n"), [(0.3, 1.0, 2.0, 1.0, 2.0)])
+
+    def test_drill_map_geometry(self):
+        mech = json.loads(read("MECH_JSON"))
+        width = mech["BOARD"]["width"]
+        # A 0.3 mm hole at board (10, 5); a 1 mm slot from (20, 5) to (22, 5).
+        y = -(100.0 + width - 5)
+        text = drill_svg.svg([(0.3, 110.0, y, 110.0, y), (1.0, 120.0, y, 122.0, y)], mech)
+        self.assertIn('<circle cx="10.0000" cy="%.4f" r="0.1500" fill="%s"/>' % (width - 5, drill_svg.COLOURS[0]), text)
+        self.assertIn('x1="20.0000" y1="%.4f" x2="22.0000" y2="%.4f" stroke="%s" stroke-width="1.0000"' % (width - 5, width - 5, drill_svg.COLOURS[1]), text)
+        too_many = [(0.1 * (i + 1), 110.0, y, 110.0, y) for i in range(len(drill_svg.COLOURS) + 1)]
         with self.assertRaises(ValueError):
-            book_png.dpi_for('<svg width="100" height="50">', 700)
+            drill_svg.svg(too_many, mech)
+
+    def test_placement_rows(self):
+        def part(ref, x="120", y="-112.5", rot="0", val="v"):
+            return {"Ref": ref, "Val": val, "Package": "p", "PosX": x, "PosY": y, "Rot": rot, "Side": "top"}
+
+        rows = placement_tsv.rows([part("U1", rot="-0.01")], [part("U1", rot="-0.01"), part("J2", rot="359.98")], 40, 25)
+        self.assertEqual(rows, [
+            ["J2", "v", "p", "20.000", "12.500", "0.0", "top", "yes"],
+            ["U1", "v", "p", "20.000", "12.500", "0.0", "top", "no"],
+        ])
+        for pos, pos_all in (
+            ([part("U1")], [part("U1"), part("U1")]),  # twice
+            ([part("U1")], [part("U1", x="121")]),  # differs
+            ([part("U1")], []),  # missing from --pos_all
+            ([], [part("U1", x="150")]),  # off the board
+            ([], [part("U1", val="a\tb")]),  # a tab
+            ([], [part("U1", rot="nan")]),  # no rotation
+        ):
+            with self.assertRaises(ValueError):
+                placement_tsv.rows(pos, pos_all, 40, 25)
+
+    def test_zip_table(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "x.zip")
+            with zipfile.ZipFile(p, "w") as z:
+                z.writestr("b.gbr", b"bb")
+                z.writestr("a.drl", b"a")
+            lines = zip_tsv.table(p).splitlines()
+            with open(p, "rb") as f:
+                whole = f.read()
+        self.assertEqual(lines, [
+            "file\tsize\tsha256",
+            "a.drl\t1\t" + hashlib.sha256(b"a").hexdigest(),
+            "b.gbr\t2\t" + hashlib.sha256(b"bb").hexdigest(),
+            "(the ZIP)\t%d\t%s" % (len(whole), hashlib.sha256(whole).hexdigest()),
+        ])
+
+    def test_drill_svg_main_reports_a_bad_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "x.drl"), "w") as f:
+                f.write("M48\nMETRIC\nT1C0.300\n%\nT1\nG91\n")
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                code = drill_svg.main(["--drill", d, "--mech", path("MECH_JSON"), "--out", os.path.join(d, "out.svg")])
+            self.assertEqual(code, 1)
+            self.assertIn("drill_svg: an Excellon command this reader does not know: G91", err.getvalue())
+            self.assertFalse(os.path.exists(os.path.join(d, "out.svg")))
 
     def test_a_hole_off_the_board(self):
         mech = json.loads(read("MECH_JSON"))

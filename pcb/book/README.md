@@ -11,7 +11,7 @@ be full width), and each is under 300 KB.
 |---|---|---|
 | `:f_cu`, `:b_cu`, `:f_silk` | `f_cu.svg/.png` and so on | Top copper, bottom copper (mirrored, as seen from below), and top silkscreen with the solder-mask openings; each with the outline. Half width. |
 | `:drill` | `drill.svg/.png` | The holes from the Excellon files JLCPCB gets, at their size, one colour per drill; the outline and the slot from `mech/mechanics.bzl`. No text: the book adds the legend. Half width. |
-| `//pcb:render_book` | `render_book/top.png`, `bottom.png` | The board in 3D, 1200 by 800 pixels. |
+| `//pcb:render_book` | `render_book/top.png`, `bottom.png` | The board in 3D, 1200 by 800 pixels asked; KiCad draws them a little smaller (1176 by 784 here). |
 | `:placement_tsv` | `placement.tsv` | Where the assembler puts each part: designator, value, package, x and y in the board's frame (mm), rotation, side, and dnp. The book draws the assembly drawing from it. KiCad 9.0.9 cannot plot the fab layer without each part's value (`pcb export svg` has no `--exclude-value`), and on this board the values overlap. |
 | `:fab_package_tsv` | `fab_package.tsv` | The files of JLCPCB's ZIP, with size and sha256, and the ZIP's own row last. The book sets it as a table. |
 

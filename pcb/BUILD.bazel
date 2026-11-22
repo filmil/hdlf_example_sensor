@@ -339,7 +339,8 @@ kicad_render(
 )
 
 # For the book (bazel-cad-book), at the size of a figure there: 1200 by
-# 800 pixels, top and bottom.
+# 800 pixels asked, top and bottom; KiCad draws them a little smaller
+# (1176 by 784 for this board).
 kicad_render(
     name = "render_book",
     height = 800,
