@@ -41,7 +41,10 @@
           "sha256": "4c9389e4722b16499e5d47d89837ec84a4ef755f105ed2a84c038156064e01ab",
           "url": "https://static.rust-lang.org/dist/rustfmt-1.100.0-x86_64-unknown-linux-gnu.tar.xz"
         }
-      ]
+      ],
+      "bt": {
+        "base": "https://bt.hdlfactory.com/rust/1.100.0/"
+      }
     },
     {
       "tag": "mirror-crates-1",
@@ -708,7 +711,10 @@
           "sha256": "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc",
           "url": "https://static.crates.io/crates/windows-sys/0.61.2/download"
         }
-      ]
+      ],
+      "bt": {
+        "base": "https://bt.hdlfactory.com/crates/"
+      }
     },
     {
       "tag": "mirror-dfu-util-0.11",
@@ -765,7 +771,10 @@
           "sha256": "fd50d32f31502322423ff94e982e97e53ca0902660849054414456bcf0dd4d0b",
           "url": "https://snapshot.ubuntu.com/ubuntu/20261117T000000Z/pool/universe/m/musl/musl_1.2.5-3build1.debian.tar.xz"
         }
-      ]
+      ],
+      "bt": {
+        "base": "https://bt.hdlfactory.com/dfu-util/0.11/"
+      }
     }
   ]
 }
