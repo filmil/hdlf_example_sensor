@@ -149,8 +149,9 @@ use_repo(crate, "crates")
 
 # dfu-util 0.11, static with libusb 1.0.30, for //fw:flash (issue #14, step
 # 5): built by tools/dfu_util and mirrored as the release
-# mirror-dfu-util-0.11, then from the same file on bt.hdlfactory.com
-# (tools/mirror --to=bt). //fw:flash is manual, so no other build fetches it.
+# mirror-dfu-util-0.11 and on bt.hdlfactory.com (tools/mirror --to=bt).
+# Bazel fetches it from the GitHub release first, then from bt.
+# //fw:flash is manual, so no other build fetches it.
 http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 
 http_file(

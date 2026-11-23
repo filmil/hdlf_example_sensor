@@ -9,13 +9,24 @@ import (
 )
 
 // rewrites applies a Bazel downloader config's rewrite lines to url, as
-// Bazel does: each pattern must match the whole URL without its scheme;
-// every line that matches gives a URL, in the file's order, with
-// https:// added back. A URL no line matches is fetched as it is.
+// Bazel's UrlRewriterConfig does: lines with the same pattern form one
+// group, at the place of the pattern's first line, with their
+// replacements in order; each pattern must match the whole URL without
+// its scheme; every replacement of every matching group gives a URL, with
+// the URL's own scheme added back. $N is group N, as in Java (so $1_ is
+// group 1 and "_"). A URL no line matches is fetched as it is.
 func rewrites(t *testing.T, cfg, url string) []string {
 	t.Helper()
-	bare := strings.TrimPrefix(url, "https://")
-	var out []string
+	scheme, bare, ok := strings.Cut(url, "://")
+	if !ok {
+		t.Fatalf("%s: no scheme", url)
+	}
+	type group struct {
+		re   *regexp.Regexp
+		subs []string
+	}
+	var groups []*group
+	byPattern := map[string]*group{}
 	for _, line := range strings.Split(cfg, "\n") {
 		f := strings.Fields(line)
 		if len(f) == 0 || strings.HasPrefix(f[0], "#") {
@@ -24,17 +35,40 @@ func rewrites(t *testing.T, cfg, url string) []string {
 		if f[0] != "rewrite" || len(f) != 3 {
 			t.Fatalf("bazel_downloader.cfg: a line this test does not know: %q", line)
 		}
-		re := regexp.MustCompile("^(?:" + f[1] + ")$")
-		m := re.FindStringSubmatchIndex(bare)
+		g, ok := byPattern[f[1]]
+		if !ok {
+			g = &group{re: regexp.MustCompile("^(?:" + f[1] + ")$")}
+			byPattern[f[1]] = g
+			groups = append(groups, g)
+		}
+		g.subs = append(g.subs, f[2])
+	}
+	javaGroups := regexp.MustCompile(`\$(\d)`)
+	var out []string
+	for _, g := range groups {
+		m := g.re.FindStringSubmatchIndex(bare)
 		if m == nil {
 			continue
 		}
-		out = append(out, "https://"+string(re.ExpandString(nil, f[2], bare, m)))
+		for _, sub := range g.subs {
+			out = append(out, scheme+"://"+string(g.re.ExpandString(nil, javaGroups.ReplaceAllString(sub, "${$1}"), bare, m)))
+		}
 	}
 	if out == nil {
 		out = []string{url}
 	}
 	return out
+}
+
+// TestRewritesLikeBazel checks the emulation itself on made-up configs.
+func TestRewritesLikeBazel(t *testing.T) {
+	cfg := "rewrite a/(x) m1/$1_\nrewrite b/.* other\nrewrite a/(x) m2/$1\n"
+	if got := strings.Join(rewrites(t, cfg, "http://a/x"), " "); got != "http://m1/x_ http://m2/x" {
+		t.Errorf("grouped, Java $1_, scheme kept: got %s", got)
+	}
+	if got := strings.Join(rewrites(t, cfg, "https://a/xy"), " "); got != "https://a/xy" {
+		t.Errorf("a partial match rewrote: got %s", got)
+	}
 }
 
 func release(t *testing.T, m *Manifest, tag string) Release {
@@ -77,7 +111,12 @@ func TestDownloaderTriesGitHubThenBtThenCratesIO(t *testing.T) {
 			}
 			return x[1]
 		}
-		if field("source") == "" {
+		switch field("source") {
+		case "":
+			continue // the workspace's own package
+		case "registry+https://github.com/rust-lang/crates.io-index":
+		default:
+			t.Errorf("%s %s: source %s; only crates.io is mirrored", field("name"), field("version"), field("source"))
 			continue
 		}
 		n++
@@ -115,15 +154,33 @@ func TestModuleListsBtSecond(t *testing.T) {
 		t.Fatal(err)
 	}
 	mod := string(b)
+	// The urls of the call that starts at after: up to the call's closing
+	// line, comment lines left out.
 	urlsOf := func(after string) []string {
 		i := strings.Index(mod, after)
 		if i < 0 {
 			t.Fatalf("MODULE.bazel has no %q", after)
 		}
-		rest := mod[i:]
-		j := strings.Index(rest, "urls = [")
-		k := strings.Index(rest[j:], "]")
-		return regexp.MustCompile(`"([^"]+)"`).FindAllString(rest[j:j+k], -1)
+		end := strings.Index(mod[i:], "\n)")
+		if end < 0 {
+			t.Fatalf("MODULE.bazel: %q has no closing )", after)
+		}
+		var call []string
+		for _, line := range strings.Split(mod[i:i+end], "\n") {
+			if !strings.HasPrefix(strings.TrimSpace(line), "#") {
+				call = append(call, line)
+			}
+		}
+		body := strings.Join(call, "\n")
+		j := strings.Index(body, "urls = [")
+		if j < 0 {
+			t.Fatalf("MODULE.bazel: %q has no urls", after)
+		}
+		k := strings.Index(body[j:], "]")
+		if k < 0 {
+			t.Fatalf("MODULE.bazel: %q's urls has no ]", after)
+		}
+		return regexp.MustCompile(`"([^"]+)"`).FindAllString(body[j:j+k], -1)
 	}
 	rust := release(t, m, "mirror-rust-1.100.0")
 	want := []string{
