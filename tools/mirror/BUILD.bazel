@@ -26,6 +26,7 @@ go_test(
     size = "small",
     srcs = [
         "bt_test.go",
+        "fallback_test.go",
         "mirror_test.go",
         "sensor_test.go",
     ],

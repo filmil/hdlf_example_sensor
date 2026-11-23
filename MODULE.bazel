@@ -69,7 +69,8 @@ register_toolchains(
 # STM32F042's Cortex-M0 (thumbv6m-none-eabi) and for host tests. rules_rust
 # 0.75.0 knows hashes up to 1.99.0, so 1.100.0's are given here, from
 # static.rust-lang.org's .sha256 files. The mirror, a release of this
-# repository, is tried first.
+# repository, is tried first, then the same files on bt.hdlfactory.com
+# (tools/mirror --to=bt), then static.rust-lang.org.
 bazel_dep(name = "rules_rust", version = "0.75.0")
 
 # The firmware's platform (//fw:stm32f042) names its CPU and OS.
@@ -95,6 +96,7 @@ rust.toolchain(
     },
     urls = [
         "https://github.com/filmil/hdlf_example_sensor/releases/download/mirror-rust-1.100.0/{}.tar.xz",
+        "https://bt.hdlfactory.com/rust/1.100.0/{}.tar.xz",
         "https://static.rust-lang.org/dist/{}.tar.xz",
     ],
     versions = ["1.100.0"],
@@ -147,13 +149,16 @@ use_repo(crate, "crates")
 
 # dfu-util 0.11, static with libusb 1.0.30, for //fw:flash (issue #14, step
 # 5): built by tools/dfu_util and mirrored as the release
-# mirror-dfu-util-0.11, which the operator uploads. //fw:flash is manual, so
-# no other build fetches it.
+# mirror-dfu-util-0.11, then from the same file on bt.hdlfactory.com
+# (tools/mirror --to=bt). //fw:flash is manual, so no other build fetches it.
 http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 
 http_file(
     name = "dfu_util",
     executable = True,
     sha256 = "95fdbb4cdaefe1762bd88f5b97ff5da1b8cf997a9bcf65c4cdf15658dd917106",
-    urls = ["https://github.com/filmil/hdlf_example_sensor/releases/download/mirror-dfu-util-0.11/dfu-util"],
+    urls = [
+        "https://github.com/filmil/hdlf_example_sensor/releases/download/mirror-dfu-util-0.11/dfu-util",
+        "https://bt.hdlfactory.com/dfu-util/0.11/dfu-util",
+    ],
 )

@@ -142,7 +142,9 @@ func TestCommand(t *testing.T) {
 // dfu-util's source by this tool, with both sources mirrored as downloaded.
 func TestMatchesModuleAndManifest(t *testing.T) {
 	mod := string(readRunfile(t, "MODULE.bazel"))
-	pin := regexp.MustCompile(`name = "dfu_util",\s*executable = True,\s*sha256 = "([0-9a-f]{64})",\s*urls = \["([^"]+)"\]`).FindStringSubmatch(mod)
+	// urls lists the GitHub mirror first (pin[2]); tools/mirror's
+	// fallback_test checks the rest of the list.
+	pin := regexp.MustCompile(`name = "dfu_util",\s*executable = True,\s*sha256 = "([0-9a-f]{64})",\s*urls = \[\s*"([^"]+)"`).FindStringSubmatch(mod)
 	if pin == nil {
 		t.Fatal("MODULE.bazel has no http_file dfu_util with executable, sha256 and urls")
 	}
