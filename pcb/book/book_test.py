@@ -6,9 +6,9 @@
 - the fab package table lists the ZIP's files with their sizes and
   sha256s, and the ZIP itself last;
 - every PNG is under 300 KB and as wide as asked, every SVG under 300 KB
-  with no date left in it;
-- svg_norm, the Excellon reader and the drill map's bounds check, on
-  made-up input.
+  with no date left in it but the epoch, which kicad_layers writes in
+  place of the time of the plot;
+- the Excellon reader and the drill map's bounds check, on made-up input.
 """
 
 import contextlib
@@ -16,6 +16,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import struct
 import sys
 import tempfile
@@ -26,7 +27,6 @@ import book_png
 import drill_svg
 import placement
 import placement_tsv
-import svg_norm
 import zip_tsv
 
 MAX_BYTES = 300 * 1024
@@ -99,16 +99,11 @@ class FiguresTest(unittest.TestCase):
                 self.assertTrue(lo <= w <= want, "%s is %d pixels wide, want %d" % (name, w, want))
             elif p.endswith(".svg"):
                 with open(p, encoding="utf-8") as f:
-                    self.assertNotRegex(f.read(), r"date \d{4}/", p)
+                    dates = re.findall(r"date \d{4}/\d\d/\d\d \d\d:\d\d:\d\d", f.read())
+                self.assertIn(dates, ([], ["date 1970/01/01 00:00:00"]), p)
 
 
 class UnitTest(unittest.TestCase):
-    def test_svg_norm(self):
-        text = '<svg><title>SVG Image created as x.svg date 2026/11/21 06:00:00 </title></svg>'
-        self.assertEqual(svg_norm.normalize(text), "<svg><title>SVG Image created as x.svg </title></svg>")
-        with self.assertRaises(ValueError):
-            svg_norm.normalize("<svg><title>no date</title></svg>")
-
     def test_excellon(self):
         text = "M48\nMETRIC\nT1C0.300\nT2C2.700\n%\nG90\nG05\nT1\nX110.0Y-120.0\nT2\nX103.5Y-121.5\nX104.0Y-122.0G85X106.0Y-122.0\nT0\nM30\n"
         self.assertEqual(

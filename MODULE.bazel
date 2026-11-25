@@ -11,7 +11,7 @@ module(
 )
 
 # The hardware rules, from the filmil registry (.bazelrc).
-bazel_dep(name = "hdlf_rules_kicad", version = "0.1.0")
+bazel_dep(name = "hdlf_rules_kicad", version = "0.1.2")
 bazel_dep(name = "hdlf_rules_netlist", version = "0.0.1")
 bazel_dep(name = "hdlf_rules_brep", version = "0.0.1")
 bazel_dep(name = "hdlf_rules_fab", version = "0.0.1")

@@ -5,11 +5,11 @@
 # an SVG and a PNG, sized for the book at 300 dpi: about 1350 pixels for a
 # full-width figure and 700 for a half-width one (the text block is about
 # 4.5 in). The tables are tab-separated; the book sets them.
-load("@hdlf_rules_kicad//kicad:defs.bzl", "kicad_pos")
+load("@hdlf_rules_kicad//kicad:defs.bzl", "kicad_layers", "kicad_pos")
 load("@hdlf_rules_netlist//netlist:defs.bzl", "determinism_test")
 load("@rules_python//python:py_binary.bzl", "py_binary")
 load("@rules_python//python:py_test.bzl", "py_test")
-load(":book.bzl", "kicad_plot", "svg_png")
+load(":book.bzl", "svg_png")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -32,25 +32,50 @@ py_binary(
     main = "book_png.py",
 )
 
-py_binary(
-    name = "svg_norm",
-    srcs = ["svg_norm.py"],
-    main = "svg_norm.py",
-)
+# The layer previews, a half-width figure each: kicad_layers plots the
+# SVG, and svg_png draws the PNG at the book's exact width. The bottom
+# copper is mirrored, as seen from below.
+_LAYER_FIGURES = [
+    (
+        "f_cu",
+        [
+            "F.Cu",
+            "Edge.Cuts",
+        ],
+        False,
+    ),
+    (
+        "b_cu",
+        [
+            "B.Cu",
+            "Edge.Cuts",
+        ],
+        True,
+    ),
+    (
+        "f_silk",
+        [
+            "F.Silkscreen",
+            "F.Mask",
+            "Edge.Cuts",
+        ],
+        False,
+    ),
+]
 
-# The layer previews, a half-width figure each. The bottom copper is
-# mirrored, as seen from below.
-[kicad_plot(
+[kicad_layers(
     name = name,
-    width = _HALF,
     layers = layers,
-    options = options,
+    mirror = mirror,
     pcb = "//pcb:pcb",
-) for name, layers, options in [
-    ("f_cu", ["F.Cu", "Edge.Cuts"], []),
-    ("b_cu", ["B.Cu", "Edge.Cuts"], ["--mirror"]),
-    ("f_silk", ["F.Silkscreen", "F.Mask", "Edge.Cuts"], []),
-]]
+) for name, layers, mirror in _LAYER_FIGURES]
+
+[svg_png(
+    name = name + "_png",
+    src = ":" + name,
+    out = name + ".png",
+    width = _HALF,
+) for name, _, _ in _LAYER_FIGURES]
 
 # No assembly drawing: KiCad 9.0.9 cannot plot F.Fab without each part's
 # value (no --exclude-value), and on this board the values overlap. The
@@ -77,8 +102,8 @@ genrule(
 
 svg_png(
     name = "drill",
-    width = _HALF,
     src = ":drill_map",
+    width = _HALF,
 )
 
 # Every part, DNP ones too, for the placement table.
@@ -126,10 +151,10 @@ genrule(
 filegroup(
     name = "figures",
     srcs = [
-        ":b_cu",
+        ":b_cu_png",
         ":drill",
-        ":f_cu",
-        ":f_silk",
+        ":f_cu_png",
+        ":f_silk_png",
         "//pcb:render_book",
     ],
 )
@@ -164,7 +189,6 @@ py_test(
         "book_test.py",
         "drill_svg.py",
         "placement_tsv.py",
-        "svg_norm.py",
         "zip_tsv.py",
     ],
     data = [
