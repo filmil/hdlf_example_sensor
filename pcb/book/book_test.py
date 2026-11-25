@@ -5,9 +5,9 @@
   positions, part by part, and marks only J2 as DNP;
 - the fab package table lists the ZIP's files with their sizes and
   sha256s, and the ZIP itself last;
-- every PNG is under 300 KB and as wide as asked, every SVG under 300 KB
-  with no date left in it but the epoch, which kicad_layers writes in
-  place of the time of the plot;
+- every PNG is under 300 KB and as wide as asked, every SVG under 300 KB;
+  each layer plot's only date is the epoch, which kicad_layers writes in
+  place of the time of the plot, and drill.svg has none;
 - the Excellon reader and the drill map's bounds check, on made-up input.
 """
 
@@ -30,6 +30,10 @@ import placement_tsv
 import zip_tsv
 
 MAX_BYTES = 300 * 1024
+
+# Any date: "date " and then a digit, up to the end of the <title>.
+DATE = re.compile(r"date \d[^<]*")
+EPOCH = "date 1970/01/01 00:00:00 "
 
 # Parts placement.py places that the assembler does not: KiCad leaves
 # their footprints out of position files.
@@ -99,8 +103,11 @@ class FiguresTest(unittest.TestCase):
                 self.assertTrue(lo <= w <= want, "%s is %d pixels wide, want %d" % (name, w, want))
             elif p.endswith(".svg"):
                 with open(p, encoding="utf-8") as f:
-                    dates = re.findall(r"date \d{4}/\d\d/\d\d \d\d:\d\d:\d\d", f.read())
-                self.assertIn(dates, ([], ["date 1970/01/01 00:00:00"]), p)
+                    dates = DATE.findall(f.read())
+                # kicad_layers writes the epoch into each plot's <title>;
+                # drill.svg is ours and has no date.
+                want = [] if name == "drill.svg" else [EPOCH]
+                self.assertEqual(dates, want, p)
 
 
 class UnitTest(unittest.TestCase):

@@ -32,9 +32,10 @@ py_binary(
     main = "book_png.py",
 )
 
-# The layer previews, a half-width figure each: kicad_layers plots the
-# SVG, and svg_png draws the PNG at the book's exact width. The bottom
-# copper is mirrored, as seen from below.
+# The layer previews, a half-width figure each: kicad_layers plots
+# `<name>_layers.svg`, and svg_png makes `<name>.svg` and `<name>.png`
+# from it, the PNG at the book's exact width. The bottom copper is
+# mirrored, as seen from below.
 _LAYER_FIGURES = [
     (
         "f_cu",
@@ -64,16 +65,15 @@ _LAYER_FIGURES = [
 ]
 
 [kicad_layers(
-    name = name,
+    name = name + "_layers",
     layers = layers,
     mirror = mirror,
     pcb = "//pcb:pcb",
 ) for name, layers, mirror in _LAYER_FIGURES]
 
 [svg_png(
-    name = name + "_png",
-    src = ":" + name,
-    out = name + ".png",
+    name = name,
+    src = ":" + name + "_layers",
     width = _HALF,
 ) for name, _, _ in _LAYER_FIGURES]
 
@@ -151,10 +151,10 @@ genrule(
 filegroup(
     name = "figures",
     srcs = [
-        ":b_cu_png",
+        ":b_cu",
         ":drill",
-        ":f_cu_png",
-        ":f_silk_png",
+        ":f_cu",
+        ":f_silk",
         "//pcb:render_book",
     ],
 )
