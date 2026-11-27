@@ -109,8 +109,11 @@ register_toolchains("@rust_toolchains//:all")
 # cargo-bazel-lock.json, crate_universe's own lockfile, which a module that
 # others depend on must ship (bazel-cad-book depends on this one). To change
 # the crates, edit third_party/crates/Cargo.toml and run
-# CARGO_BAZEL_REPIN=1 bazel mod tidy, which rewrites both lockfiles; then
-# bazel run //tools/crate_licences, update
+# CARGO_BAZEL_REPIN=1 bazel mod tidy, which rewrites both lockfiles. Run it
+# also after changing crate.from_cargo or crate.annotation below, the
+# stm32-metapac patch, or rules_rust's version: each invalidates
+# cargo-bazel-lock.json, and a build without the repin fails. After a
+# crate change, also bazel run //tools/crate_licences, update
 # third_party/crates/crate_licences.txt, and add an alias in
 # third_party/crates/BUILD.bazel for each new direct dependency.
 crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
