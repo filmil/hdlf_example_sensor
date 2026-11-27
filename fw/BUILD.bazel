@@ -13,6 +13,9 @@ load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
+# For bazel-cad-book, which quotes firmware.bzl through example_file.
+exports_files(["firmware.bzl"])
+
 platform(
     name = "stm32f042",
     constraint_values = [
