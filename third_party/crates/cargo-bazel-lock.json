@@ -1,5 +1,5 @@
 {
-  "checksum": "c178e605e589dde146d16d25f763a695a8a1568ddc7a1b4c0d088fd5ae0fe1f0",
+  "checksum": "449c658c43e094ef7bee739f2d280beac868081c1e059a65dc94723b155dd78c",
   "conditions": {
     "cfg(any())": [],
     "cfg(any(target_arch = \"arm\", target_pointer_width = \"32\", target_pointer_width = \"64\"))": [
@@ -4478,10 +4478,6 @@
     "stm32-metapac 21.0.0": {
       "additive_build_file_content": "\nfilegroup(\n    name = \"chip_metadata\",\n    srcs = [\n        \"src/chips/metadata_0043.rs\",\n        \"src/chips/stm32f042f6/metadata.rs\",\n    ],\n    visibility = [\"//visibility:public\"],\n)\n\nfilegroup(\n    name = \"device_x\",\n    srcs = [\"src/chips/stm32f042f6/device.x\"],\n    visibility = [\"//visibility:public\"],\n)\n",
       "build_script_attrs": {
-        "data_glob": [
-          "**",
-          "src/chips/stm32f042f6/device.x"
-        ],
         "link_deps": [
           {
             "id": "cortex-m 0.7.10",

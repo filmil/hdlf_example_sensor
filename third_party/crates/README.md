@@ -6,6 +6,10 @@ firmware's crates from (`MODULE.bazel`), each pinned by `Cargo.lock`'s
 sha256. Targets depend on the aliases in `BUILD.bazel`
 (`//third_party/crates:embassy-stm32`), never on `@crates` directly.
 
+- `cargo-bazel-lock.json`: crate_universe's lock, repinned by
+  `CARGO_BAZEL_REPIN=1 bazel mod tidy`. `:lock_labels_test` checks that
+  it names no file of the root module (`@@//`): modules that depend on
+  this one would look for it in their own repository.
 - `crate_licences.txt`: each crate's SPDX licence, from its own
   `Cargo.toml`; `//fw:licence_test` checks it allows our use.
 - `<name>-<version>/`, one per locked crate:

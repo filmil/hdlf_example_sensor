@@ -157,7 +157,6 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 """,
-    build_script_data_glob = ["src/chips/stm32f042f6/device.x"],
     crate = "stm32-metapac",
     extra_aliased_targets = {
         "stm32-metapac-device-x": "device_x",
