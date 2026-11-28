@@ -6,10 +6,11 @@
 # the sensor's driver, and the checks: the flash and RAM budget,
 # determinism, and the crates' licences.
 load("@hdlf_rules_netlist//netlist:defs.bzl", "determinism_test")
-load(":firmware.bzl", "firmware")
 load("@rules_python//python:py_binary.bzl", "py_binary")
 load("@rules_python//python:py_test.bzl", "py_test")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
+load(":firmware.bzl", "firmware")
+load(":label_dir.bzl", "label_dir")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -29,11 +30,15 @@ platform(
 rust_binary(
     name = "fw_code",
     srcs = ["src/main.rs"],
-    compile_data = ["memory.x"],
+    compile_data = [
+        "memory.x",
+        "//third_party/crates:stm32-metapac-device-x",
+    ],
     crate_name = "fw",
     rustc_flags = [
         "-Clink-arg=-Tlink.x",
-        "-Clink-arg=-L" + package_name(),
+        "-Clink-arg=-L" + label_dir("//fw:memory.x"),
+        "-Clink-arg=-L" + label_dir("@crates__stm32-metapac-21.0.0//:src/chips/stm32f042f6/device.x"),
     ],
     target_compatible_with = [
         "@platforms//cpu:armv6-m",
@@ -221,8 +226,8 @@ py_test(
     size = "small",
     srcs = ["test/pinout_tsv_test.py"],
     data = [
-        ":pins_rs",
         ":pinout_tsv",
+        ":pins_rs",
     ],
     env = {
         "PINOUT_TSV": "$(rootpath :pinout_tsv)",

@@ -73,9 +73,27 @@ bazel test //fw/...
 
 stm32-metapac's build script points the linker at the chip's `device.x`
 in the crate's own source directory, which Bazel's link step does not
-see. `third_party/crates/stm32-metapac-device-x.patch`, applied by a `crate.annotation` in
-`MODULE.bazel`, copies the file into the build script's output
-directory, which the link step does see.
+see. So a `crate.annotation` in `MODULE.bazel` exports the file, and
+`:fw_code` takes it as an input and adds its directory to the link search
+path, as it does for `memory.x`. Both directories are found from the
+files' labels, so the build also works where this module is a dependency,
+as in bazel-cad-book.
+
+The repository name `crates__stm32-metapac-21.0.0` holds the crate's
+version, and `src/chips/stm32f042f6/device.x` names the chip. A new
+stm32-metapac version or another chip changes both, in `MODULE.bazel`
+(the annotation's filegroup and the `use_repo`) and in `:fw_code`'s
+`-L`.
+
+When another module depends on this one and builds the firmware, that
+other module, the root, must declare two toolchains of its own:
+
+- Rust: rules_rust uses only the root module's Rust toolchains. Copy this
+  module's whole `rust.toolchain` block, with its `use_repo` and
+  `register_toolchains` lines: the same Rust version, and
+  `extra_target_triples = ["thumbv6m-none-eabi"]`.
+- C++: this module's is a `dev_dependency`, so the root registers one,
+  such as `hermetic_cc_toolchain`'s zig toolchain, as this module does.
 
 ## The checks
 

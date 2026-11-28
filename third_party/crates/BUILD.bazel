@@ -2,7 +2,7 @@
 #
 # The firmware's crates (issue #14): Cargo.toml and Cargo.lock, which
 # crate_universe pins them by (MODULE.bazel); crate_licences.txt, each
-# crate's SPDX licence; the stm32-metapac patch; and one directory per
+# crate's SPDX licence; and one directory per
 # locked crate, <name>-<version>/, with its LICENSE and SOURCE.json
 # (written by bazel run //tools/crate_licences).
 #
@@ -20,7 +20,6 @@ exports_files([
     "Cargo.toml",
     "cargo-bazel-lock.json",
     "crate_licences.txt",
-    "stm32-metapac-device-x.patch",
 ])
 
 # Every crate of Cargo.lock has its directory, and no other crate does:
@@ -39,6 +38,17 @@ py_test(
     },
     main = "licence_dirs_test.py",
     deps = ["//tools/crate_licences:check"],
+)
+
+# The lock names no file of the root module ("@@//"), which a module
+# that depends on this one would look for in its own repository.
+py_test(
+    name = "lock_labels_test",
+    size = "small",
+    srcs = ["lock_labels_test.py"],
+    data = ["cargo-bazel-lock.json"],
+    env = {"LOCK": "$(rootpath cargo-bazel-lock.json)"},
+    main = "lock_labels_test.py",
 )
 
 alias(
@@ -122,6 +132,12 @@ alias(
 alias(
     name = "stm32-metapac",
     actual = "@crates//:stm32-metapac",
+    tags = ["manual"],
+)
+
+alias(
+    name = "stm32-metapac-device-x",
+    actual = "@crates//:stm32-metapac-device-x",
     tags = ["manual"],
 )
 

@@ -129,8 +129,13 @@ crate.from_cargo(
 )
 
 # stm32-metapac's build script points the linker at device.x in its own
-# source directory, which Bazel's link step does not see: the patch copies
-# it into the build script's OUT_DIR, which the link step does see.
+# source directory, which Bazel's link step does not see. So the
+# annotation exports device.x as a filegroup, @crates//:stm32-metapac-device-x,
+# and //fw:fw_code adds it to its inputs and its directory to the link
+# search path. There is no patch: rules_rust writes an annotation's
+# patches into cargo-bazel-lock.json as labels of the root module
+# ("@@//..."), so they break every module that depends on this one
+# (https://github.com/bazelbuild/rules_rust/pull/4425).
 #
 # The chip's metadata (its pins, and each peripheral's pins with their
 # alternate functions) is also a filegroup, @crates//:stm32-metapac-metadata,
@@ -145,14 +150,23 @@ filegroup(
     ],
     visibility = ["//visibility:public"],
 )
-""",
-    build_script_data_glob = ["src/chips/stm32f042f6/device.x"],
-    crate = "stm32-metapac",
-    extra_aliased_targets = {"stm32-metapac-metadata": "chip_metadata"},
-    patch_args = ["-p1"],
-    patches = ["//third_party/crates:stm32-metapac-device-x.patch"],
+
+filegroup(
+    name = "device_x",
+    srcs = ["src/chips/stm32f042f6/device.x"],
+    visibility = ["//visibility:public"],
 )
-use_repo(crate, "crates")
+""",
+    crate = "stm32-metapac",
+    extra_aliased_targets = {
+        "stm32-metapac-device-x": "device_x",
+        "stm32-metapac-metadata": "chip_metadata",
+    },
+)
+
+# The crate's own repository, for the directory of its device.x
+# (//fw:fw_code). Its name holds the crate's version.
+use_repo(crate, "crates", "crates__stm32-metapac-21.0.0")
 
 # dfu-util 0.11, static with libusb 1.0.30, for //fw:flash (issue #14, step
 # 5): built by tools/dfu_util and mirrored as the release
