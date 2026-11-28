@@ -1,5 +1,5 @@
 {
-  "checksum": "b91cf83de71a40a5d5aae39c3629873654070b4d7a89692c4aceb5dfa9e3d1cc",
+  "checksum": "c178e605e589dde146d16d25f763a695a8a1568ddc7a1b4c0d088fd5ae0fe1f0",
   "conditions": {
     "cfg(any())": [],
     "cfg(any(target_arch = \"arm\", target_pointer_width = \"32\", target_pointer_width = \"64\"))": [
@@ -4476,7 +4476,7 @@
       "version": "0.4.0"
     },
     "stm32-metapac 21.0.0": {
-      "additive_build_file_content": "\nfilegroup(\n    name = \"chip_metadata\",\n    srcs = [\n        \"src/chips/metadata_0043.rs\",\n        \"src/chips/stm32f042f6/metadata.rs\",\n    ],\n    visibility = [\"//visibility:public\"],\n)\n",
+      "additive_build_file_content": "\nfilegroup(\n    name = \"chip_metadata\",\n    srcs = [\n        \"src/chips/metadata_0043.rs\",\n        \"src/chips/stm32f042f6/metadata.rs\",\n    ],\n    visibility = [\"//visibility:public\"],\n)\n\nfilegroup(\n    name = \"device_x\",\n    srcs = [\"src/chips/stm32f042f6/device.x\"],\n    visibility = [\"//visibility:public\"],\n)\n",
       "build_script_attrs": {
         "data_glob": [
           "**",
@@ -4524,6 +4524,7 @@
         ]
       },
       "extra_aliased_targets": {
+        "stm32-metapac-device-x": "device_x",
         "stm32-metapac-metadata": "chip_metadata"
       },
       "library_target_name": "stm32_metapac",
@@ -4536,12 +4537,6 @@
       "package_url": "https://github.com/embassy-rs/stm32-data",
       "repository": {
         "Http": {
-          "patch_args": [
-            "-p1"
-          ],
-          "patches": [
-            "@@//third_party/crates:stm32-metapac-device-x.patch"
-          ],
           "sha256": "e74b78632cea498cfb28386a29f8bfae7476d6570a78733eb5fecbee66c2f4ce",
           "url": "https://static.crates.io/crates/stm32-metapac/21.0.0/download"
         }

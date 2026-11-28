@@ -8,8 +8,6 @@ sha256. Targets depend on the aliases in `BUILD.bazel`
 
 - `crate_licences.txt`: each crate's SPDX licence, from its own
   `Cargo.toml`; `//fw:licence_test` checks it allows our use.
-- `stm32-metapac-device-x.patch`: applied to stm32-metapac by a
-  `crate.annotation` in `MODULE.bazel` (see `//fw`'s README).
 - `<name>-<version>/`, one per locked crate:
   - `LICENSE`: its licence files verbatim, each after a line naming
     it and where it came from;
