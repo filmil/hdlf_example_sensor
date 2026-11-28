@@ -18,6 +18,7 @@ exports_files([
     "README.md",
     "Cargo.lock",
     "Cargo.toml",
+    "cargo-bazel-lock.json",
     "crate_licences.txt",
     "stm32-metapac-device-x.patch",
 ])
